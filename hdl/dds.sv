@@ -18,11 +18,14 @@ module dds
     output                                  m_axis_out_tvalid 
 );
 /*********************************************************************************************/
+// architecture for USE_TAYLOR = 0 is similar as in https://zipcpu.com/dsp/2017/08/26/quarterwave.html
+// lut file is compatible to zipcpu lut file
 
 localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_WIDTH : PHASE_DW - 2;
 
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
-initial begin
+initial	begin
+    $readmemh("../../hdl/sine_lut.hex", lut);
 end
 
 // input buffer, stage 1
@@ -40,10 +43,12 @@ reg unsigned [1:0] quadrant_index;
 always_ff @(posedge clk) begin
     in_valid_buf2 <= !reset_n ? 0 : in_valid_buf;
     quadrant_index <= !reset_n ? 0 : phase_buf[EFFECTIVE_LUT_WIDTH+1:EFFECTIVE_LUT_WIDTH];
-    if (phase_buf[EFFECTIVE_LUT_WIDTH])
+    if (phase_buf[EFFECTIVE_LUT_WIDTH]) begin
         lut_index <= !reset_n ? 0 : ~phase_buf[EFFECTIVE_LUT_WIDTH - 1 : 0];
-    else
-        lut_index <= !reset_n ? 0 : ~phase_buf[EFFECTIVE_LUT_WIDTH - 1 : 0];
+    end
+    else begin
+        lut_index <= !reset_n ? 0 : phase_buf[EFFECTIVE_LUT_WIDTH - 1 : 0];
+    end
 end
 
 // lut reading, stage 3
@@ -54,6 +59,9 @@ always_ff @(posedge clk) begin
     in_valid_buf3 <= !reset_n ? 0 : in_valid_buf2;
     quadrant_index2 <= !reset_n ? 0 : quadrant_index;
     lut_data <= !reset_n ? 0 : lut[lut_index];
+    if(in_valid_buf2) begin
+        //$display("lut[%d] = %d",lut_index, lut[lut_index]);
+    end
 end
 
 // output buffer, stage 4

@@ -38,7 +38,7 @@ class TB(object):
         spec = importlib.util.spec_from_file_location("dds_model", model_dir)
         foo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(foo)
-        self.model = foo.Model(self.R, self.N, self.M, self.INP_DW, self.OUT_DW, self.VAR_RATE, self.EXACT_SCALING) 
+        self.model = foo.Model(self.PHASE_DW, self.OUT_DW, self.USE_TAYLOR, self.LUT_WIDTH) 
         cocotb.fork(Clock(self.dut.clk, CLK_PERIOD_NS, units='ns').start())
         cocotb.fork(self.model_clk(CLK_PERIOD_NS, 'ns'))    
           
@@ -58,13 +58,12 @@ class TB(object):
             await RisingEdge(self.dut.clk)
             self.model.set_data(phase) 
             self.input.append(phase)
-            self.dut.s_axis_in_tdata <= phase
-            self.dut.s_axis_in_tvalid <= 1
+            self.dut.s_axis_phase_tdata <= phase
+            self.dut.s_axis_phase_tvalid <= 1
 
     async def cycle_reset(self):
-        self.dut.s_axis_rate_tvalid <= 0
-        self.dut.s_axis_in_tvalid <= 0
-        self.dut.reset_n.setimmediatevalue(1)
+        self.dut.s_axis_phase_tvalid <= 0
+        self.dut.reset_n <= 0
         await RisingEdge(self.dut.clk)
         self.dut.reset_n <= 0
         await RisingEdge(self.dut.clk)
@@ -77,39 +76,42 @@ class TB(object):
 async def simple_test(dut):
     tb = TB(dut)
     await tb.cycle_reset()
-    num_items = 100
+    num_items = 2**int(dut.PHASE_DW)  # one complete wave
     gen = cocotb.fork(tb.generate_input())
     output = []
     output_model = []
     count = 0
-    tolerance = 1
+    # this tolerance is needed because the lut is shifted 0.5 phase step to the right
+    # see https://zipcpu.com/dsp/2017/08/26/quarterwave.html for explaination why
+    tolerance = np.ceil((2**(int(dut.OUT_DW)-1)-1) / 2**(int(dut.PHASE_DW)-2))
+    print(F"tolerance = {tolerance}")
     while len(output_model) < num_items or len(output) < num_items:
         await RisingEdge(dut.clk)
         if(tb.model.data_valid()):
-            output_model.append(tb.model.get_data())
-            #print(f"model:\t[{len(output_model)}]\t {int(output_model[-1])} \t {output_model[-1]/max_out_value}")
+            output_model.append(int(tb.model.get_data()))
+            #print(f"model:\t[{len(output_model)}]\t {int(output_model[-1])} \t {output_model[-1]}")
 
         if dut.m_axis_out_tvalid == 1:
             a=dut.m_axis_out_tdata.value.integer
             if (a & (1 << (tb.OUT_DW - 1))) != 0:
                 a = a - (1 << tb.OUT_DW)
-            output.append(a)
-            #print(f"hdl: \t[{len(output)}]\t {int(a)} \t {a/max_out_value} ")
+            output.append(int(a))
+            #print(f"hdl: \t[{len(output)}]\t {int(a)} \t {a} ")
         #print(f"{int(tb.model.data_valid())} {dut.m_axis_out_tvalid}")
         count += 1
     
     for i in range(num_items):
-        assert np.abs(output[i] - output_model[i]) <= tolerance, f"hdl: {output[i]} \t model: {output_model[i]}"
+        assert np.abs(output[i] - output_model[i]) <= tolerance, f"[{i}] hdl: {output[i]} \t model: {output_model[i]}"
     #print(f"received {len(output)} samples")
     gen.kill()
-    tb.dut.s_axis_in_tvalid <= 0
-    
+    tb.dut.s_axis_phase_tvalid <= 0
 
 # cocotb-test
 
 
 tests_dir = os.path.abspath(os.path.dirname(__file__))
 rtl_dir = os.path.abspath(os.path.join(tests_dir, '..', 'hdl'))
+tools_dir = os.path.abspath(os.path.join(tests_dir, '..', 'tools'))
 
 @pytest.mark.parametrize("PHASE_DW", [16, 8])
 @pytest.mark.parametrize("OUT_DW", [16, 3])
@@ -133,6 +135,12 @@ def test_cic_d(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW):
     parameters['OUT_DW'] = OUT_DW
     parameters['USE_TAYLOR'] = USE_TAYLOR
     parameters['LUT_DW'] = LUT_DW
+
+    file_path = os.path.abspath(os.path.join(tests_dir, '../tools/generate_sine_lut.py'))
+    spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
+    generate_sine_lut = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generate_sine_lut)
+    generate_sine_lut.main(['--PHASE_DW',str(PHASE_DW),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
 
     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
     sim_build="sim_build/" + "_".join(("{}={}".format(*i) for i in parameters.items()))
