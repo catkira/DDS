@@ -26,7 +26,7 @@ class TB(object):
         self.PHASE_DW = int(dut.PHASE_DW)
         self.OUT_DW = int(dut.OUT_DW)
         self.USE_TAYLOR = int(dut.USE_TAYLOR)
-        self.LUT_WIDTH = int(dut.LUT_WIDTH)
+        self.LUT_DW = int(dut.LUT_DW)
         self.SIN_COS = int(dut.SIN_COS)
 
         self.log = logging.getLogger("cocotb.tb")
@@ -39,7 +39,7 @@ class TB(object):
         spec = importlib.util.spec_from_file_location("dds_model", model_dir)
         foo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(foo)
-        self.model = foo.Model(self.PHASE_DW, self.OUT_DW, self.USE_TAYLOR, self.LUT_WIDTH, self.SIN_COS) 
+        self.model = foo.Model(self.PHASE_DW, self.OUT_DW, self.USE_TAYLOR, self.LUT_DW, self.SIN_COS) 
         cocotb.fork(Clock(self.dut.clk, CLK_PERIOD_NS, units='ns').start())
         cocotb.fork(self.model_clk(CLK_PERIOD_NS, 'ns'))    
           
@@ -129,8 +129,8 @@ tools_dir = os.path.abspath(os.path.join(tests_dir, '..', 'tools'))
 
 @pytest.mark.parametrize("PHASE_DW", [16, 8])
 @pytest.mark.parametrize("OUT_DW", [16, 3])
-@pytest.mark.parametrize("USE_TAYLOR", [0])
-@pytest.mark.parametrize("LUT_DW", [0])
+@pytest.mark.parametrize("USE_TAYLOR", [1])
+@pytest.mark.parametrize("LUT_DW", [6])
 @pytest.mark.parametrize("SIN_COS", [1, 0])
 def test_cic_d(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     dut = "dds"
@@ -156,7 +156,10 @@ def test_cic_d(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
     generate_sine_lut = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generate_sine_lut)
-    generate_sine_lut.main(['--PHASE_DW',str(PHASE_DW),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
+    if USE_TAYLOR:
+        generate_sine_lut.main(['--PHASE_DW',str(LUT_DW+2),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
+    else:
+        generate_sine_lut.main(['--PHASE_DW',str(PHASE_DW),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
 
     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
     sim_build="sim_build/" + "_".join(("{}={}".format(*i) for i in parameters.items()))
