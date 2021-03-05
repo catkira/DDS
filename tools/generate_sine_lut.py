@@ -1,5 +1,4 @@
 import numpy as np
-import math
 import argparse
 
 
@@ -8,8 +7,8 @@ def create_lut_file(filename, PHASE_DW, OUT_DW):
     k = 0
     f = open(filename,'w')
     for p in range(int((2**PHASE_DW)/4)):
-        lut_val = int(np.round(math.sin(2 * math.pi * p / (2**PHASE_DW)) * MAX_OUT_VAL))
-        #print(F"sin({2 * math.pi * p / (2**PHASE_DW)}) = {math.sin(2 * math.pi * p / (2**PHASE_DW))}  lut_val = {lut_val}")
+        lut_val = int(np.round(np.sin(2 * np.pi * p / (2**PHASE_DW)) * MAX_OUT_VAL))
+        #print(F"sin({2 * np.pi * p / (2**PHASE_DW)}) = {np.sin(2 * np.pi * p / (2**PHASE_DW))}  lut_val = {lut_val}")
         if k % 8 == 0:
             if k != 0:
                 f.write("\n")
