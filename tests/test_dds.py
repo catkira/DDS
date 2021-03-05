@@ -27,6 +27,7 @@ class TB(object):
         self.OUT_DW = int(dut.OUT_DW)
         self.USE_TAYLOR = int(dut.USE_TAYLOR)
         self.LUT_WIDTH = int(dut.LUT_WIDTH)
+        self.SIN_COS = int(dut.SIN_COS)
 
         self.log = logging.getLogger("cocotb.tb")
         self.log.setLevel(logging.DEBUG)        
@@ -38,7 +39,7 @@ class TB(object):
         spec = importlib.util.spec_from_file_location("dds_model", model_dir)
         foo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(foo)
-        self.model = foo.Model(self.PHASE_DW, self.OUT_DW, self.USE_TAYLOR, self.LUT_WIDTH) 
+        self.model = foo.Model(self.PHASE_DW, self.OUT_DW, self.USE_TAYLOR, self.LUT_WIDTH, self.SIN_COS) 
         cocotb.fork(Clock(self.dut.clk, CLK_PERIOD_NS, units='ns').start())
         cocotb.fork(self.model_clk(CLK_PERIOD_NS, 'ns'))    
           
@@ -76,10 +77,13 @@ class TB(object):
 async def simple_test(dut):
     tb = TB(dut)
     await tb.cycle_reset()
-    num_items = 2**int(dut.PHASE_DW)  # one complete wave
+    #num_items = 2**int(dut.PHASE_DW)  # one complete wave
+    num_items = 100
     gen = cocotb.fork(tb.generate_input())
     output = []
     output_model = []
+    output_cos = []
+    output_model_cos = []
     count = 0
     # this tolerance is needed because the lut is shifted 0.5 phase step to the right
     # see https://zipcpu.com/dsp/2017/08/26/quarterwave.html for explaination why
@@ -89,19 +93,29 @@ async def simple_test(dut):
         await RisingEdge(dut.clk)
         if(tb.model.data_valid()):
             output_model.append(int(tb.model.get_data()))
-            #print(f"model:\t[{len(output_model)}]\t {int(output_model[-1])} \t {output_model[-1]}")
+            output_model_cos.append(int(tb.model.get_data_cos()))
+            print(f"model:\t[{len(output_model)}]\t {output_model[-1]} \t {output_model_cos[-1]}")
 
-        if dut.m_axis_out_tvalid == 1:
-            a=dut.m_axis_out_tdata.value.integer
+        if dut.m_axis_out_sin_tvalid == 1:
+            a=dut.m_axis_out_sin_tdata.value.integer
             if (a & (1 << (tb.OUT_DW - 1))) != 0:
                 a = a - (1 << tb.OUT_DW)
             output.append(int(a))
-            #print(f"hdl: \t[{len(output)}]\t {int(a)} \t {a} ")
+            if tb.SIN_COS:
+                a=dut.m_axis_out_cos_tdata.value.integer
+                if (a & (1 << (tb.OUT_DW - 1))) != 0:
+                    a = a - (1 << tb.OUT_DW)
+            else:
+                a=0
+            output_cos.append(int(a))
+            print(f"hdl: \t[{len(output)}]\t {output[-1]} \t {output_cos[-1]} ")
         #print(f"{int(tb.model.data_valid())} {dut.m_axis_out_tvalid}")
         count += 1
     
     for i in range(num_items):
         assert np.abs(output[i] - output_model[i]) <= tolerance, f"[{i}] hdl: {output[i]} \t model: {output_model[i]}"
+        if tb.SIN_COS:
+            assert np.abs(output_cos[i] - output_model_cos[i]) <= tolerance, f"[{i}] hdl: {output_cos[i]} \t model: {output_model_cos[i]}"
     #print(f"received {len(output)} samples")
     gen.kill()
     tb.dut.s_axis_phase_tvalid <= 0
@@ -117,7 +131,8 @@ tools_dir = os.path.abspath(os.path.join(tests_dir, '..', 'tools'))
 @pytest.mark.parametrize("OUT_DW", [16, 3])
 @pytest.mark.parametrize("USE_TAYLOR", [0])
 @pytest.mark.parametrize("LUT_DW", [0])
-def test_cic_d(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW):
+@pytest.mark.parametrize("SIN_COS", [1, 0])
+def test_cic_d(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     dut = "dds"
     module = os.path.splitext(os.path.basename(__file__))[0]
     toplevel = dut
@@ -135,6 +150,7 @@ def test_cic_d(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW):
     parameters['OUT_DW'] = OUT_DW
     parameters['USE_TAYLOR'] = USE_TAYLOR
     parameters['LUT_DW'] = LUT_DW
+    parameters['SIN_COS'] = SIN_COS
 
     file_path = os.path.abspath(os.path.join(tests_dir, '../tools/generate_sine_lut.py'))
     spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
