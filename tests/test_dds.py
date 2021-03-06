@@ -78,6 +78,7 @@ async def simple_test(dut):
     tb = TB(dut)
     await tb.cycle_reset()
     num_items = 2**int(dut.PHASE_DW)  # one complete wave
+    #num_items = 100
     gen = cocotb.fork(tb.generate_input())
     output = []
     output_model = []
@@ -86,7 +87,7 @@ async def simple_test(dut):
     count = 0
     tolerance = 0
     if tb.USE_TAYLOR:
-        tolerance = 2**tb.OUT_DW / 100  # 1% tolerance
+        tolerance = 2**tb.OUT_DW / 100 * 0.1  # 0.1% tolerance
     print(F"tolerance = {tolerance}")
     while len(output_model) < num_items or len(output) < num_items:
         await RisingEdge(dut.clk)
