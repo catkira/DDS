@@ -19,7 +19,9 @@ module dds
     output  wire    signed [OUT_DW-1:0]     m_axis_out_sin_tdata,
     output                                  m_axis_out_sin_tvalid,
     output  wire    signed [OUT_DW-1:0]     m_axis_out_cos_tdata,
-    output                                  m_axis_out_cos_tvalid
+    output                                  m_axis_out_cos_tvalid,
+    output  wire    signed [2*OUT_DW-1:0]   m_axis_out_tdata,
+    output                                  m_axis_out_tvalid
 );
 /*********************************************************************************************/
 
@@ -27,6 +29,7 @@ localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
 localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW - 2) : 1;
 
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
+// `include "sine_lut_10_16.vh"  // I dont know how to insert variable numbers into the include string
 initial	begin
     string filename = $sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW);
     $readmemh(filename, lut);
@@ -168,5 +171,7 @@ else begin
     assign m_axis_out_cos_tdata = out_cos_buf;
     assign m_axis_out_cos_tvalid = out_valid_buf;
 end
+assign m_axis_out_tdata = {m_axis_out_sin_tdata, m_axis_out_cos_tdata};
+assign m_axis_out_tvalid = m_axis_out_sin_tvalid;
 
 endmodule
