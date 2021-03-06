@@ -156,10 +156,11 @@ def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
     generate_sine_lut = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generate_sine_lut)
+    lut_width = PHASE_DW -2
     if USE_TAYLOR:
-        generate_sine_lut.main(['--PHASE_DW',str(LUT_DW+2),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
-    else:
-        generate_sine_lut.main(['--PHASE_DW',str(PHASE_DW),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
+        lut_width = LUT_DW
+    lut_filename = os.path.abspath(os.path.join(rtl_dir, 'sine_lut_'+str(lut_width)+'_'+str(OUT_DW)  +'.hex'))
+    generate_sine_lut.main(['--PHASE_DW',str(lut_width),'--OUT_DW',str(OUT_DW),'--filename',lut_filename])
 
     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
     sim_build="sim_build/" + "_".join(("{}={}".format(*i) for i in parameters.items()))
@@ -205,10 +206,11 @@ def test_dds(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
     generate_sine_lut = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generate_sine_lut)
+    lut_width = PHASE_DW -2
     if USE_TAYLOR:
-        generate_sine_lut.main(['--PHASE_DW',str(LUT_DW+2),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
-    else:
-        generate_sine_lut.main(['--PHASE_DW',str(PHASE_DW),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
+        lut_width = LUT_DW
+    lut_filename = os.path.abspath(os.path.join(rtl_dir, 'sine_lut_'+str(lut_width)+'_'+str(OUT_DW)  +'.hex'))
+    generate_sine_lut.main(['--PHASE_DW',str(lut_width),'--OUT_DW',str(OUT_DW),'--filename',lut_filename])
 
     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
     sim_build="sim_build/" + "_".join(("{}={}".format(*i) for i in parameters.items()))

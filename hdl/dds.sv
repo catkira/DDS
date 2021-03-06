@@ -22,15 +22,14 @@ module dds
     output                                  m_axis_out_cos_tvalid
 );
 /*********************************************************************************************/
-// architecture for USE_TAYLOR = 0 is similar as in https://zipcpu.com/dsp/2017/08/26/quarterwave.html
-// lut file is compatible to zipcpu lut file
 
 localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
 localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW - 2) : 1;
 
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
 initial	begin
-    $readmemh("../../hdl/sine_lut.hex", lut);
+    string filename = $sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW);
+    $readmemh(filename, lut);
     if (USE_TAYLOR) begin
         if (LUT_DW > PHASE_DW - 2) begin
             $display("LUT_DW > PHASE_DW - 2 does not make sense!");

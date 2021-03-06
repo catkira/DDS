@@ -7,8 +7,8 @@ def create_lut_file(filename, PHASE_DW, OUT_DW):
     MAX_OUT_VAL = 2**(OUT_DW - 1) - 1
     k = 0
     f = open(filename,'w')
-    for p in range(int((2**PHASE_DW)/4)):
-        lut_val = int(np.round(np.sin(2 * np.pi *  p / (2**PHASE_DW)) * MAX_OUT_VAL))
+    for p in range(int(2**PHASE_DW)):
+        lut_val = int(np.round(np.sin(2 * np.pi *  p / (2**PHASE_DW) / 4) * MAX_OUT_VAL))
         #print(F"sin({2 * np.pi * p / (2**PHASE_DW)}) = {np.sin(2 * np.pi * p / (2**PHASE_DW))}  lut_val = {lut_val}")
         if k % 8 == 0:
             if k != 0:
