@@ -13,13 +13,12 @@ pytest -v --workers 10
 ```
 
 # TODO
-- tests
-- taylor series approximation
+- tests on hardware
 
 # References
-- https://zipcpu.com/dsp/2017/08/26/quarterwave.html
 - http://www.martin-kumm.de/wiki/doku.php?id=04FPGA_Cores:DDS_Synthesizer
-- https://github.com/spr02/DDS/blob/master/matlab/dds.m
+- https://zipcpu.com/dsp/2017/08/26/quarterwave.html
+- https://github.com/spr02/DDS
 
 # License
 
