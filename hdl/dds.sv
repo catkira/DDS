@@ -26,9 +26,9 @@ module dds
 
 localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
 localparam PI_HALF = (2**PHASE_DW)/4;
-localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? 1 : PHASE_DW - (LUT_DW - 2);
+localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW - 2) : 1;
 
-reg signed [OUT_DW - 1 : 0] lut [2**EFFECTIVE_LUT_WIDTH - 1 : 0];
+reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
 initial	begin
     $readmemh("../../hdl/sine_lut.hex", lut);
     if (USE_TAYLOR) begin
@@ -50,23 +50,23 @@ end
 reg in_valid_buf2;
 reg unsigned [EFFECTIVE_LUT_WIDTH-1:0] sin_lut_index, cos_lut_index;
 reg unsigned [PHASE_ERROR_WIDTH-1:0] phase_error;
-reg unsigned [1:0] sin_quadrant_index, cos_quadrant_index;
-wire [PHASE_DW-1:0] cos_phase;
-assign cos_phase = phase_buf + PI_HALF;
+reg unsigned [1:0] sin_quadrant_index;
 always_ff @(posedge clk) begin
     in_valid_buf2 <= !reset_n ? 0 : in_valid_buf;
     sin_quadrant_index <= !reset_n ? 0 : phase_buf[PHASE_DW-1:PHASE_DW-2];
-    cos_quadrant_index <= !reset_n ? 0 : cos_phase[PHASE_DW-1:PHASE_DW-2];
-    if (phase_buf[PHASE_DW - 2])
-        sin_lut_index <= !reset_n ? 0 : ~phase_buf[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH];
+    // sin
+    if (phase_buf[PHASE_DW - 2]) // if in 2nd or 4th quadrant
+        sin_lut_index <= !reset_n ? 0 : ~phase_buf[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH] + 1;
     else
         sin_lut_index <= !reset_n ? 0 : phase_buf[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH];
+    // cos
     if (SIN_COS || USE_TAYLOR) begin
-        if (cos_phase[PHASE_DW - 2])
-            cos_lut_index <= !reset_n ? 0 : ~cos_phase[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH];
+        if (!phase_buf[PHASE_DW - 2]) // if in 1st or 3rd quadrant
+            cos_lut_index <= !reset_n ? 0 : ~phase_buf[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH] + 1;
         else
-            cos_lut_index <= !reset_n ? 0 : cos_phase[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH];
+            cos_lut_index <= !reset_n ? 0 : phase_buf[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH];
     end
+
     if (USE_TAYLOR) begin
         phase_error <= !reset_n ? 0 : phase_buf[PHASE_ERROR_WIDTH - 1: 0];
     end
@@ -75,22 +75,30 @@ end
 // lut reading, stage 3
 reg in_valid_buf3;
 reg signed [OUT_DW-1:0] sin_lut_data, cos_lut_data;
-reg unsigned [1:0] sin_quadrant_index2, cos_quadrant_index2;
+reg unsigned [1:0] sin_quadrant_index2;
 reg unsigned [PHASE_ERROR_WIDTH-1:0] phase_error2;
 always_ff @(posedge clk) begin
     in_valid_buf3 <= !reset_n ? 0 : in_valid_buf2;
+    // sin
     sin_quadrant_index2 <= !reset_n ? 0 : sin_quadrant_index;
-    sin_lut_data <= !reset_n ? 0 : lut[sin_lut_index];
+    if (sin_quadrant_index[0] && sin_lut_index == 0)
+        sin_lut_data <= !reset_n ? 0 : 2**(OUT_DW-1) - 1;
+    else
+        sin_lut_data <= !reset_n ? 0 : lut[sin_lut_index];
+    // cos
     if (SIN_COS || USE_TAYLOR) begin
-        cos_quadrant_index2 <= !reset_n ? 0 : cos_quadrant_index;
-        cos_lut_data <= !reset_n ? 0 : lut[cos_lut_index];
+        if (!sin_quadrant_index[0] && cos_lut_index == 0)
+            cos_lut_data <= !reset_n ? 0 : 2**(OUT_DW-1) - 1;
+        else
+            cos_lut_data <= !reset_n ? 0 :  lut[cos_lut_index];
     end
-    if (USE_TAYLOR) begin
+
+    if (USE_TAYLOR)
         phase_error2 <= !reset_n ? 0 : phase_error;
-    end
+    // debug stuff
     if(in_valid_buf2) begin
-        $display("lut[%d] = %d",sin_lut_index, lut[sin_lut_index]);
-        $display("lut[%d] = %d",cos_lut_index, lut[cos_lut_index]);
+        // $display("lut[%d] = %d",sin_lut_index, sin_lut_data);
+        // $display("lut[%d] = %d",cos_lut_index, cos_lut_data);
     end
 end
 
@@ -100,12 +108,12 @@ reg signed [OUT_DW - 1 : 0] out_cos_buf;
 reg unsigned [PHASE_ERROR_WIDTH-1:0] phase_error3;
 reg out_valid_buf;
 always_ff @(posedge clk) begin
-    if (sin_quadrant_index2[1])
+    if (sin_quadrant_index2[1]) // if in 3rd or 4th quadrant
         out_sin_buf <= !reset_n ? 0 : -sin_lut_data;
     else
         out_sin_buf <= !reset_n ? 0 : sin_lut_data;
     if (SIN_COS || USE_TAYLOR) begin
-        if (cos_quadrant_index2[1])
+        if (sin_quadrant_index2 == 2'b10 || sin_quadrant_index2 == 2'b01) // if in 2nd or 3rd quadrant
             out_cos_buf <= !reset_n ? 0 : -cos_lut_data;
         else
             out_cos_buf <= !reset_n ? 0 : cos_lut_data;
@@ -119,11 +127,25 @@ end
 reg signed [OUT_DW - 1 : 0] out_sin_buf2;
 reg signed [OUT_DW - 1 : 0] out_cos_buf2;
 reg out_valid_buf2;
+wire signed [PHASE_ERROR_WIDTH:0] phase_error_signed;
+assign phase_error_signed = {1'b0, phase_error3};
+
+localparam EXTENDED_WIDTH = OUT_DW + PHASE_ERROR_WIDTH;
+wire signed [EXTENDED_WIDTH - 1 : 0] sin_extended, cos_extended;
+wire signed [EXTENDED_WIDTH - 1 : 0] sin_corrected, cos_corrected;
+assign sin_extended = {out_sin_buf, {(PHASE_ERROR_WIDTH){1'b0}}};
+assign sin_corrected = sin_extended + out_cos_buf * phase_error_signed;
+assign cos_extended = {out_cos_buf, {(PHASE_ERROR_WIDTH){1'b0}}};
+assign cos_corrected = cos_extended + out_sin_buf * phase_error_signed;
 always_ff @(posedge clk) begin
-    if (out_valid_buf)
-        $display("sin_phase_error = %d", phase_error3);
-    out_sin_buf2 <= out_sin_buf + out_cos_buf * phase_error3; // TODO: fix scaling
-    out_cos_buf2 <= out_cos_buf + out_sin_buf * phase_error3;
+    if (out_valid_buf && USE_TAYLOR) begin
+        //$display("sin_phase_error * cos = %d * %d = %d", phase_error_signed, out_cos_buf, out_cos_buf * phase_error_signed);
+        //$display("corrected = %d  uncorrected = %d", sin_corrected, sin_extended);
+        // $display("cos_phase_error * sin = %d * %d = %d", phase_error_signed, out_sin_buf, out_sin_buf * phase_error_signed);
+        // $display("corrected = %d  uncorrected = %d", cos_corrected[EXTENDED_WIDTH - 1 -: OUT_DW], cos_extended[EXTENDED_WIDTH - 1 -: OUT_DW]);
+    end
+    out_sin_buf2 <= sin_corrected[EXTENDED_WIDTH - 1 -: OUT_DW];
+    out_cos_buf2 <= cos_corrected[EXTENDED_WIDTH - 1 -: OUT_DW];
     out_valid_buf2 <= !reset_n ? 0 : out_valid_buf;    
 end
 
