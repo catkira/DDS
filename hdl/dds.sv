@@ -25,7 +25,6 @@ module dds
 // lut file is compatible to zipcpu lut file
 
 localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
-localparam PI_HALF = (2**PHASE_DW)/4;
 localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW - 2) : 1;
 
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
@@ -134,13 +133,13 @@ localparam EXTENDED_WIDTH = OUT_DW + PHASE_ERROR_WIDTH;
 wire signed [EXTENDED_WIDTH - 1 : 0] sin_extended, cos_extended;
 wire signed [EXTENDED_WIDTH - 1 : 0] sin_corrected, cos_corrected;
 assign sin_extended = {out_sin_buf, {(PHASE_ERROR_WIDTH){1'b0}}};
-assign sin_corrected = sin_extended + out_cos_buf * phase_error_signed;
+assign sin_corrected = sin_extended + out_cos_buf * phase_error_signed * (2 * 3) / 2**LUT_DW;
 assign cos_extended = {out_cos_buf, {(PHASE_ERROR_WIDTH){1'b0}}};
-assign cos_corrected = cos_extended + out_sin_buf * phase_error_signed;
+assign cos_corrected = cos_extended - out_sin_buf * phase_error_signed * (2 * 3) / 2**LUT_DW;
 always_ff @(posedge clk) begin
     if (out_valid_buf && USE_TAYLOR) begin
-        //$display("sin_phase_error * cos = %d * %d = %d", phase_error_signed, out_cos_buf, out_cos_buf * phase_error_signed);
-        //$display("corrected = %d  uncorrected = %d", sin_corrected, sin_extended);
+        $display("sin_phase_error * cos = %d * %d = %d", phase_error_signed, out_cos_buf, out_cos_buf * phase_error_signed);
+        $display("corrected = %d  uncorrected = %d", sin_corrected, sin_extended);
         // $display("cos_phase_error * sin = %d * %d = %d", phase_error_signed, out_sin_buf, out_sin_buf * phase_error_signed);
         // $display("corrected = %d  uncorrected = %d", cos_corrected[EXTENDED_WIDTH - 1 -: OUT_DW], cos_extended[EXTENDED_WIDTH - 1 -: OUT_DW]);
     end

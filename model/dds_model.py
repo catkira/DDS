@@ -13,6 +13,9 @@ class Model:
         self.SIN_COS = SIN_COS
         
         self.extra_delay = 5                
+        if self.USE_TAYLOR:
+            self.extra_delay = 7
+            
         self.data_out_buf = np.zeros(self.extra_delay+1)
         self.data_out_cos_buf = np.zeros(self.extra_delay+1)
         self.out_valid = np.zeros(self.extra_delay+1)

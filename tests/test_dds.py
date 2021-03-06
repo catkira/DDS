@@ -77,8 +77,7 @@ class TB(object):
 async def simple_test(dut):
     tb = TB(dut)
     await tb.cycle_reset()
-    #num_items = 2**int(dut.PHASE_DW)  # one complete wave
-    num_items = 300
+    num_items = 2**int(dut.PHASE_DW)  # one complete wave
     gen = cocotb.fork(tb.generate_input())
     output = []
     output_model = []
@@ -87,7 +86,7 @@ async def simple_test(dut):
     count = 0
     tolerance = 0
     if tb.USE_TAYLOR:
-        tolerance = np.ceil((2**(int(dut.OUT_DW)-1)-1) / 2**(int(dut.PHASE_DW)-2))
+        tolerance = 2**tb.OUT_DW / 100  # 1% tolerance
     print(F"tolerance = {tolerance}")
     while len(output_model) < num_items or len(output) < num_items:
         await RisingEdge(dut.clk)
@@ -127,53 +126,53 @@ tests_dir = os.path.abspath(os.path.dirname(__file__))
 rtl_dir = os.path.abspath(os.path.join(tests_dir, '..', 'hdl'))
 tools_dir = os.path.abspath(os.path.join(tests_dir, '..', 'tools'))
 
-# @pytest.mark.parametrize("PHASE_DW", [16])
-# @pytest.mark.parametrize("OUT_DW", [16])
-# @pytest.mark.parametrize("USE_TAYLOR", [1])
-# @pytest.mark.parametrize("LUT_DW", [6])
-# @pytest.mark.parametrize("SIN_COS", [1])
-# def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
-#     dut = "dds"
-#     module = os.path.splitext(os.path.basename(__file__))[0]
-#     toplevel = dut
+@pytest.mark.parametrize("PHASE_DW", [16])
+@pytest.mark.parametrize("OUT_DW", [16])
+@pytest.mark.parametrize("USE_TAYLOR", [1])
+@pytest.mark.parametrize("LUT_DW", [10])
+@pytest.mark.parametrize("SIN_COS", [1])
+def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
+    dut = "dds"
+    module = os.path.splitext(os.path.basename(__file__))[0]
+    toplevel = dut
 
-#     verilog_sources = [
-#         os.path.join(rtl_dir, f"{dut}.sv"),
-#     ]
-#     includes = [
-#         os.path.join(rtl_dir, ""),
-#     ]    
+    verilog_sources = [
+        os.path.join(rtl_dir, f"{dut}.sv"),
+    ]
+    includes = [
+        os.path.join(rtl_dir, ""),
+    ]    
 
-#     parameters = {}
+    parameters = {}
 
-#     parameters['PHASE_DW'] = PHASE_DW
-#     parameters['OUT_DW'] = OUT_DW
-#     parameters['USE_TAYLOR'] = USE_TAYLOR
-#     parameters['LUT_DW'] = LUT_DW
-#     parameters['SIN_COS'] = SIN_COS
+    parameters['PHASE_DW'] = PHASE_DW
+    parameters['OUT_DW'] = OUT_DW
+    parameters['USE_TAYLOR'] = USE_TAYLOR
+    parameters['LUT_DW'] = LUT_DW
+    parameters['SIN_COS'] = SIN_COS
 
-#     file_path = os.path.abspath(os.path.join(tests_dir, '../tools/generate_sine_lut.py'))
-#     spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
-#     generate_sine_lut = importlib.util.module_from_spec(spec)
-#     spec.loader.exec_module(generate_sine_lut)
-#     if USE_TAYLOR:
-#         generate_sine_lut.main(['--PHASE_DW',str(LUT_DW+2),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
-#     else:
-#         generate_sine_lut.main(['--PHASE_DW',str(PHASE_DW),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
+    file_path = os.path.abspath(os.path.join(tests_dir, '../tools/generate_sine_lut.py'))
+    spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
+    generate_sine_lut = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generate_sine_lut)
+    if USE_TAYLOR:
+        generate_sine_lut.main(['--PHASE_DW',str(LUT_DW+2),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
+    else:
+        generate_sine_lut.main(['--PHASE_DW',str(PHASE_DW),'--OUT_DW',str(OUT_DW),'--filename',os.path.abspath(os.path.join(rtl_dir, 'sine_lut.hex'))])
 
-#     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
-#     sim_build="sim_build/" + "_".join(("{}={}".format(*i) for i in parameters.items()))
-#     cocotb_test.simulator.run(
-#         python_search=[tests_dir],
-#         verilog_sources=verilog_sources,
-#         includes=includes,
-#         toplevel=toplevel,
-#         module=module,
-#         parameters=parameters,
-#         sim_build=sim_build,
-#         extra_env=extra_env,
-#         testcase="simple_test",
-#     )
+    extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
+    sim_build="sim_build/" + "_".join(("{}={}".format(*i) for i in parameters.items()))
+    cocotb_test.simulator.run(
+        python_search=[tests_dir],
+        verilog_sources=verilog_sources,
+        includes=includes,
+        toplevel=toplevel,
+        module=module,
+        parameters=parameters,
+        sim_build=sim_build,
+        extra_env=extra_env,
+        testcase="simple_test",
+    )
     
 
 @pytest.mark.parametrize("PHASE_DW", [16, 8])
