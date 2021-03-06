@@ -19,6 +19,7 @@ pytest -v --workers 10
 - http://www.martin-kumm.de/wiki/doku.php?id=04FPGA_Cores:DDS_Synthesizer
 - https://zipcpu.com/dsp/2017/08/26/quarterwave.html
 - https://github.com/spr02/DDS
+- https://www.fpga4fun.com/DDS2.html
 
 # License
 

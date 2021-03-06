@@ -159,7 +159,7 @@ def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     lut_width = PHASE_DW -2
     if USE_TAYLOR:
         lut_width = LUT_DW
-    lut_filename = os.path.abspath(os.path.join(rtl_dir, 'sine_lut_'+str(lut_width)+'_'+str(OUT_DW)  +'.hex'))
+    lut_filename = os.path.abspath(os.path.join(rtl_dir, 'sine_lut_'+str(lut_width)+'_'+str(OUT_DW)))
     generate_sine_lut.main(['--PHASE_DW',str(lut_width),'--OUT_DW',str(OUT_DW),'--filename',lut_filename])
 
     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
@@ -209,7 +209,7 @@ def test_dds(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     lut_width = PHASE_DW -2
     if USE_TAYLOR:
         lut_width = LUT_DW
-    lut_filename = os.path.abspath(os.path.join(rtl_dir, 'sine_lut_'+str(lut_width)+'_'+str(OUT_DW)  +'.hex'))
+    lut_filename = os.path.abspath(os.path.join(rtl_dir, 'sine_lut_'+str(lut_width)+'_'+str(OUT_DW)))
     generate_sine_lut.main(['--PHASE_DW',str(lut_width),'--OUT_DW',str(OUT_DW),'--filename',lut_filename])
 
     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}

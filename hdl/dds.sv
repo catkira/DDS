@@ -31,8 +31,7 @@ localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW - 2) : 1;
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
 // `include "sine_lut_10_16.vh"  // I dont know how to insert variable numbers into the include string
 initial	begin
-    string filename = $sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW);
-    $readmemh(filename, lut);
+    $readmemh($sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
     if (USE_TAYLOR) begin
         if (LUT_DW > PHASE_DW - 2) begin
             $display("LUT_DW > PHASE_DW - 2 does not make sense!");
