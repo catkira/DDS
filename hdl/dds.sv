@@ -124,8 +124,6 @@ localparam t_PHASE_FACTOR PHASE_FACTOR = t_PHASE_FACTOR'(PHASE_FACTOR_REAL);
 localparam SIN_LUT_DELAY = 1;
 reg unsigned [PHASE_ERROR_WIDTH - 1 : 0]    phase_error_buf [0:SIN_LUT_DELAY];
 localparam EXTENDED_WIDTH    = PHASE_FACTOR_WIDTH + PHASE_ERROR_WIDTH;
-wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
-assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
 
 reg signed   [EXTENDED_WIDTH - 1 : 0]       phase_error_multiplied_extended;
 if (USE_TAYLOR) begin
@@ -139,6 +137,8 @@ if (USE_TAYLOR) begin
         phase_error_multiplied_extended <= !reset_n ? 0 : phase_error_buf[SIN_LUT_DELAY] * PHASE_FACTOR; 
     end
 end
+wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
+assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
 
 // taylor correction, stage 4
 localparam TAYLOR_MULT_WIDTH = PHASE_DW + OUT_DW;
