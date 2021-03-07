@@ -8,7 +8,7 @@ module dds
     parameter USE_TAYLOR = 0,         // use taylor approximation
     parameter LUT_DW = 10,            // width of sine lut if taylor approximation is used
     parameter SIN_COS = 0,            // set to 1 if cos output in addition to sin output is desired
-    parameter DECIMAL_SHIFT = 5
+    parameter DECIMAL_SHIFT = 0       // not used
 )
 /*********************************************************************************************/
 (
@@ -26,15 +26,16 @@ module dds
 /*********************************************************************************************/
 
 localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
-localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW - 2) : 1;
 
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
 // `include "sine_lut_10_16.vh"  // I dont know how to insert variable numbers into the include string
 initial	begin
     $readmemh($sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
+    //$readmemh($sformatf("D:/git/flocra_system/hdl/cores/DDS_v1_0/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
     if (USE_TAYLOR) begin
         if (LUT_DW > PHASE_DW - 2) begin
             $display("LUT_DW > PHASE_DW - 2 does not make sense!");
+            $finish;
         end
     end
 end
@@ -112,16 +113,21 @@ always_ff @(posedge clk) begin
     out_valid_buf <= !reset_n ? 0 : in_valid_buf3;    
 end
 
-// taylor phase offset multiplication, stage 2-4
-wire signed [PHASE_ERROR_WIDTH:0] phase_error_signed;
-localparam      EXTENDED_WIDTH    = OUT_DW + PHASE_ERROR_WIDTH;
-localparam real PHASE_FACTOR_REAL = (2 * 3.14159) / 2**LUT_DW * 2**DECIMAL_SHIFT;
-typedef bit unsigned [DECIMAL_SHIFT - 1 : 0] t_PHASE_FACTOR;
+// taylor phase offset multiplication, stage 2-3
+localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW + 2) : 1;
+localparam PHASE_FACTOR_WIDTH = 18;  // 18 is width of small operand of DSP48E1 
+localparam PI_DECIMAL_SHIFT   = 14;  // this leaves 4 bits for 2*pi which is enough
+localparam real PHASE_FACTOR_REAL = (2 * 3.141592654) * 2**PI_DECIMAL_SHIFT;
+typedef bit unsigned [PHASE_FACTOR_WIDTH - 1 : 0] t_PHASE_FACTOR;
 localparam t_PHASE_FACTOR PHASE_FACTOR = t_PHASE_FACTOR'(PHASE_FACTOR_REAL);
-localparam SIN_LUT_DELAY = 3;
-reg unsigned [PHASE_ERROR_WIDTH-1:0]                    phase_error_buf [0:SIN_LUT_DELAY];
-reg signed   [EXTENDED_WIDTH + DECIMAL_SHIFT - 1 : 0]   phase_error_multiplied;
-assign phase_error_signed = {1'b0, phase_error_buf[SIN_LUT_DELAY]};
+
+localparam SIN_LUT_DELAY = 1;
+reg unsigned [PHASE_ERROR_WIDTH - 1 : 0]    phase_error_buf [0:SIN_LUT_DELAY];
+localparam EXTENDED_WIDTH    = PHASE_FACTOR_WIDTH + PHASE_ERROR_WIDTH;
+wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
+assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
+
+reg signed   [EXTENDED_WIDTH - 1 : 0]       phase_error_multiplied_extended;
 if (USE_TAYLOR) begin
     always_ff@(posedge clk) begin
         foreach(phase_error_buf[k]) begin
@@ -130,30 +136,32 @@ if (USE_TAYLOR) begin
             else
                 phase_error_buf[k] <= !reset_n ? 0 : phase_error_buf[k-1];
         end
-        phase_error_multiplied <= !reset_n ? 0 : phase_error_signed * PHASE_FACTOR;
+        phase_error_multiplied_extended <= !reset_n ? 0 : phase_error_buf[SIN_LUT_DELAY] * PHASE_FACTOR; 
     end
 end
 
-// taylor correction, stage 5
+// taylor correction, stage 4
+localparam TAYLOR_MULT_WIDTH = PHASE_DW + OUT_DW;
+// TAYLOR_MULT_WIDTH should fit into the large add operand of a DSP48E1 which is 48 bits
+wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_extended, cos_extended;
+wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_corrected, cos_corrected;
+
+assign sin_extended = {out_sin_buf, {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
+assign sin_corrected = sin_extended + out_cos_buf * phase_error_multiplied;
+assign cos_extended = {out_cos_buf, {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
+assign cos_corrected = cos_extended - out_sin_buf * phase_error_multiplied;
+
 reg signed [OUT_DW - 1 : 0] out_sin_buf2;
 reg signed [OUT_DW - 1 : 0] out_cos_buf2;
 reg out_valid_buf2;
-wire signed [EXTENDED_WIDTH - 1 : 0] sin_extended, cos_extended;
-wire signed [EXTENDED_WIDTH - 1 : 0] sin_corrected, cos_corrected;
-assign sin_extended = {out_sin_buf, {(PHASE_ERROR_WIDTH){1'b0}}};
-assign sin_corrected = sin_extended + out_cos_buf * phase_error_multiplied[EXTENDED_WIDTH + DECIMAL_SHIFT - 1 -: EXTENDED_WIDTH];
-assign cos_extended = {out_cos_buf, {(PHASE_ERROR_WIDTH){1'b0}}};
-assign cos_corrected = cos_extended - out_sin_buf * phase_error_multiplied[EXTENDED_WIDTH + DECIMAL_SHIFT - 1 -: EXTENDED_WIDTH];
 if (USE_TAYLOR) begin
     always_ff @(posedge clk) begin
-        if (out_valid_buf && USE_TAYLOR) begin
-            // $display("sin_phase_error * cos = %d * %d = %d", phase_error_signed, out_cos_buf, out_cos_buf * phase_error_signed);
-            // $display("corrected = %d  uncorrected = %d", sin_corrected, sin_extended);
-            // $display("cos_phase_error * sin = %d * %d = %d", phase_error_signed, out_sin_buf, out_sin_buf * phase_error_signed);
-            // $display("corrected = %d  uncorrected = %d", cos_corrected[EXTENDED_WIDTH - 1 -: OUT_DW], cos_extended[EXTENDED_WIDTH - 1 -: OUT_DW]);
-        end
-        out_sin_buf2 <= !reset_n ? 0 : sin_corrected[EXTENDED_WIDTH - 1 -: OUT_DW];
-        out_cos_buf2 <= !reset_n ? 0 : cos_corrected[EXTENDED_WIDTH - 1 -: OUT_DW];
+        // if (out_valid_buf && USE_TAYLOR) begin
+        //     if(out_cos_buf < 0)
+        //         $display("out_cos_buf = %d, factor = %d", out_cos_buf, TAYLOR_MULT_WIDTH'(out_cos_buf * phase_error_multiplied));
+        // end
+        out_sin_buf2 <= !reset_n ? 0 : sin_corrected[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];  // divide by 2**(PHASE_DW)
+        out_cos_buf2 <= !reset_n ? 0 : cos_corrected[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];  // divide by 2**(PHASE_DW)
         out_valid_buf2 <= !reset_n ? 0 : out_valid_buf;    
     end
 end

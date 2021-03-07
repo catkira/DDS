@@ -16,7 +16,7 @@ import numpy as np
 
 import importlib.util
 
-CLK_PERIOD_NS = 8
+CLK_PERIOD_NS = 2
 CLK_PERIOD_S = CLK_PERIOD_NS * 0.000000001
 
 class TB(object):
@@ -33,6 +33,7 @@ class TB(object):
         self.log.setLevel(logging.DEBUG)        
 
         self.input = []
+        self.freq = 100
 
         tests_dir = os.path.abspath(os.path.dirname(__file__))
         model_dir = os.path.abspath(os.path.join(tests_dir, '../model/dds_model.py'))
@@ -60,7 +61,7 @@ class TB(object):
             self.input.append(phase)
             self.dut.s_axis_phase_tdata <= phase
             self.dut.s_axis_phase_tvalid <= 1
-            phase += 1
+            phase += self.freq
 
     async def cycle_reset(self):
         self.dut.s_axis_phase_tvalid <= 0
@@ -77,8 +78,8 @@ class TB(object):
 async def simple_test(dut):
     tb = TB(dut)
     await tb.cycle_reset()
-    num_items = 2**int(dut.PHASE_DW)  # one complete wave
-    #num_items = 100
+    num_items = 2**int(dut.PHASE_DW)//tb.freq  # one complete wave
+    #num_items = 2**int(dut.PHASE_DW)//self.freq/2  # one half wave
     gen = cocotb.fork(tb.generate_input())
     output = []
     output_model = []
@@ -87,14 +88,14 @@ async def simple_test(dut):
     count = 0
     tolerance = 0
     if tb.USE_TAYLOR:
-        tolerance = 2**tb.OUT_DW / 100 * 0.1  # 0.1% tolerance
+        tolerance = 10
     print(F"tolerance = {tolerance}")
     while len(output_model) < num_items or len(output) < num_items:
         await RisingEdge(dut.clk)
         if(tb.model.data_valid()):
             output_model.append(int(tb.model.get_data()))
             output_model_cos.append(int(tb.model.get_data_cos()))
-            print(f"model:\t[{len(output_model)-1}]\t {output_model[-1]} \t {output_model_cos[-1]}")
+            #print(f"model:\t[{len(output_model)-1}]\t {output_model[-1]} \t {output_model_cos[-1]}")
 
         if dut.m_axis_out_sin_tvalid == 1:
             a=dut.m_axis_out_sin_tdata.value.integer
@@ -108,10 +109,18 @@ async def simple_test(dut):
             else:
                 a=0
             output_cos.append(int(a))
-            print(f"hdl: \t[{len(output)-1}]\t {output[-1]} \t {output_cos[-1]} ")
+            #print(f"hdl: \t[{len(output)-1}]\t {output[-1]} \t {output_cos[-1]} ")
         #print(f"{int(tb.model.data_valid())} {dut.m_axis_out_tvalid}")
         count += 1
-    
+    if False:
+        with open('../../out.txt', 'w') as outfile:
+            np.savetxt(outfile, output, fmt='%d')
+        with open('../../out_cos.txt', 'w') as outfile:
+            np.savetxt(outfile, output_cos, fmt='%d')
+        with open('../../out_model.txt', 'w') as outfile:
+            np.savetxt(outfile, output_model, fmt='%d')
+        with open('../../out_model_cos.txt', 'w') as outfile:
+            np.savetxt(outfile, output_model_cos, fmt='%d')
     for i in range(num_items):
         assert np.abs(output[i] - output_model[i]) <= tolerance, f"[{i}] hdl: {output[i]} \t model: {output_model[i]}"
         if tb.SIN_COS:
@@ -119,7 +128,6 @@ async def simple_test(dut):
     #print(f"received {len(output)} samples")
     gen.kill()
     tb.dut.s_axis_phase_tvalid <= 0
-
 # cocotb-test
 
 
@@ -127,10 +135,10 @@ tests_dir = os.path.abspath(os.path.dirname(__file__))
 rtl_dir = os.path.abspath(os.path.join(tests_dir, '..', 'hdl'))
 tools_dir = os.path.abspath(os.path.join(tests_dir, '..', 'tools'))
 
-@pytest.mark.parametrize("PHASE_DW", [16])
+@pytest.mark.parametrize("PHASE_DW", [20, 24])
 @pytest.mark.parametrize("OUT_DW", [16])
 @pytest.mark.parametrize("USE_TAYLOR", [1])
-@pytest.mark.parametrize("LUT_DW", [10])
+@pytest.mark.parametrize("LUT_DW", [9, 11])
 @pytest.mark.parametrize("SIN_COS", [1])
 def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     dut = "dds"
