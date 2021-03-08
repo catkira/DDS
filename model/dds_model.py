@@ -16,7 +16,7 @@ class Model:
         
         self.extra_delay = 5                
         if self.USE_TAYLOR:
-            self.extra_delay += 3
+            self.extra_delay += 4
             
         self.data_out_buf = np.zeros(self.extra_delay+1)
         self.data_out_cos_buf = np.zeros(self.extra_delay+1)

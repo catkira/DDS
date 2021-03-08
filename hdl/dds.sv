@@ -122,7 +122,7 @@ end
 // ------------------- TAYLOR CORRECTION -----------------------------
 // TODO: add negative offset to phase error so that taylor correction is effective in 2 directions, should improve accuracy
 
-// taylor phase offset multiplication, stage 2-3
+// taylor phase offset multiplication, stage 2-4
 localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW + 2) : 1;
 localparam PHASE_FACTOR_WIDTH = 18;  // 18 is width of small operand of DSP48E1 
 localparam PI_DECIMAL_SHIFT   = 14;  // this leaves 4 bits for 2*pi which is enough
@@ -130,7 +130,7 @@ localparam real PHASE_FACTOR_REAL = (2 * 3.141592654) * 2**PI_DECIMAL_SHIFT;
 typedef bit unsigned [PHASE_FACTOR_WIDTH - 1 : 0] t_PHASE_FACTOR;
 localparam t_PHASE_FACTOR PHASE_FACTOR = t_PHASE_FACTOR'(PHASE_FACTOR_REAL);
 
-localparam SIN_LUT_DELAY = 1;
+localparam SIN_LUT_DELAY = 2;
 reg unsigned [PHASE_ERROR_WIDTH - 1 : 0]    phase_error_buf [0:SIN_LUT_DELAY];
 localparam EXTENDED_WIDTH    = PHASE_FACTOR_WIDTH + PHASE_ERROR_WIDTH;
 
@@ -143,13 +143,13 @@ if (USE_TAYLOR) begin
             else
                 phase_error_buf[k] <= phase_error_buf[k-1];
         end
-        phase_error_multiplied_extended <= phase_error_buf[SIN_LUT_DELAY] * PHASE_FACTOR; 
+        phase_error_multiplied_extended <= phase_error_buf[SIN_LUT_DELAY-1] * PHASE_FACTOR; 
     end
 end
 wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
 assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
 
-// taylor correction pipeline, stage 4-6
+// taylor correction pipeline, stage 5-7
 localparam TAYLOR_PIPELINE_STAGES = 2;
 reg signed [OUT_DW - 1 : 0] out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
 reg signed [OUT_DW - 1 : 0] out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
@@ -174,7 +174,7 @@ if (USE_TAYLOR) begin
     end
 end
 
-// taylor correction, stage 7
+
 localparam TAYLOR_MULT_WIDTH = PHASE_DW + OUT_DW;
 // TAYLOR_MULT_WIDTH should fit into the large add operand of a DSP48E1 which is 48 bits
 wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_extended, cos_extended;
