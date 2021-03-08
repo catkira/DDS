@@ -79,8 +79,8 @@ async def simple_test(dut):
     tb = TB(dut)
     await tb.cycle_reset()
     #num_items = 2**int(dut.PHASE_DW)//tb.freq  # one complete wave
-    #num_items = 2**int(dut.PHASE_DW)//self.freq/2  # one half wave
-    num_items = 100
+    num_items = 2**int(dut.PHASE_DW)//tb.freq//2  # one half wave
+    #num_items = 100
     gen = cocotb.fork(tb.generate_input())
     output = []
     output_model = []
@@ -96,7 +96,7 @@ async def simple_test(dut):
         if(tb.model.data_valid()):
             output_model.append(int(tb.model.get_data()))
             output_model_cos.append(int(tb.model.get_data_cos()))
-            print(f"model:\t[{len(output_model)-1}]\t {output_model[-1]} \t {output_model_cos[-1]}")
+            #print(f"model:\t[{len(output_model)-1}]\t {output_model[-1]} \t {output_model_cos[-1]}")
 
         if dut.m_axis_out_sin_tvalid == 1:
             a=dut.m_axis_out_sin_tdata.value.integer
@@ -110,7 +110,7 @@ async def simple_test(dut):
             else:
                 a=0
             output_cos.append(int(a))
-            print(f"hdl: \t[{len(output)-1}]\t {output[-1]} \t {output_cos[-1]} ")
+            #print(f"hdl: \t[{len(output)-1}]\t {output[-1]} \t {output_cos[-1]} ")
         #print(f"{int(tb.model.data_valid())} {dut.m_axis_out_tvalid}")
         count += 1
     if False:
@@ -129,7 +129,6 @@ async def simple_test(dut):
     #print(f"received {len(output)} samples")
     gen.kill()
     tb.dut.s_axis_phase_tvalid <= 0
-    assert False
 # cocotb-test
 
 
