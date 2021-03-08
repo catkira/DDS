@@ -30,8 +30,11 @@ localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
 // `include "sine_lut_10_16.vh"  // I dont know how to insert variable numbers into the include string
 initial	begin
-    $readmemh($sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
-    //$readmemh($sformatf("D:/git/flocra_system/hdl/cores/DDS_v1_0/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
+    `ifdef COCOTB_SIM
+        $readmemh($sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
+    `else
+        $readmemh($sformatf("../../../submodules/DDS/lut_data/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
+    `endif
     if (USE_TAYLOR) begin
         if (LUT_DW > PHASE_DW - 2) begin
             $display("LUT_DW > PHASE_DW - 2 does not make sense!");
