@@ -146,7 +146,7 @@ wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multipli
 assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
 
 // taylor correction pipeline, stage 4-5
-localparam TAYLOR_PIPELINE_STAGES = 1;
+localparam TAYLOR_PIPELINE_STAGES = 2;
 reg signed [OUT_DW - 1 : 0] out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
 reg signed [OUT_DW - 1 : 0] out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
 reg signed [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0] phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1 : 0];
