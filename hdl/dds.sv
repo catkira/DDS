@@ -24,7 +24,16 @@ module dds
     output                                  m_axis_out_tvalid
 );
 /*********************************************************************************************/
+// input buffer, stage 1
+reg unsigned [PHASE_DW - 1 : 0] phase_buf;
+reg in_valid_buf;
+always_ff @(posedge clk) begin
+    phase_buf <= !reset_n ? 0 : (s_axis_phase_tvalid ? s_axis_phase_tdata : phase_buf);
+    in_valid_buf <= !reset_n ? 0 : s_axis_phase_tvalid;
+end
 
+// ------------------- SIN COS LUT -----------------------------
+//  TODO: put sin-cos lut in separate module
 localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
 
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
@@ -41,14 +50,6 @@ initial	begin
             $finish;
         end
     end
-end
-
-// input buffer, stage 1
-reg unsigned [PHASE_DW - 1 : 0] phase_buf;
-reg in_valid_buf;
-always_ff @(posedge clk) begin
-    phase_buf <= !reset_n ? 0 : (s_axis_phase_tvalid ? s_axis_phase_tdata : phase_buf);
-    in_valid_buf <= !reset_n ? 0 : s_axis_phase_tvalid;
 end
 
 // calculate lut index, stage 2
@@ -117,6 +118,7 @@ always_ff @(posedge clk) begin
 end
 
 // ------------------- TAYLOR CORRECTION -----------------------------
+// TODO: add negative offset to phase error so that taylor correction is effective in 2 directions, should improve accuracy
 
 // taylor phase offset multiplication, stage 2-3
 localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW + 2) : 1;
@@ -145,7 +147,7 @@ end
 wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
 assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
 
-// taylor correction pipeline, stage 4-5
+// taylor correction pipeline, stage 4-6
 localparam TAYLOR_PIPELINE_STAGES = 2;
 reg signed [OUT_DW - 1 : 0] out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
 reg signed [OUT_DW - 1 : 0] out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
@@ -158,19 +160,19 @@ if (USE_TAYLOR) begin
                 out_sin_buf_taylor[k] <= !reset_n ? 0 : out_sin_buf;
                 out_cos_buf_taylor[k] <= !reset_n ? 0 : out_cos_buf;
                 phase_error_multiplied_buf[k] <= !reset_n ? 0 : phase_error_multiplied;
-                valid_taylor[k] <= out_valid_buf;
+                valid_taylor[k] <= !reset_n ? 0 : out_valid_buf;
             end
             else begin
                 out_sin_buf_taylor[k] <= !reset_n ? 0 : out_sin_buf_taylor[k-1];
                 out_cos_buf_taylor[k] <= !reset_n ? 0 : out_cos_buf_taylor[k-1];
                 phase_error_multiplied_buf[k] <= !reset_n ? 0 : phase_error_multiplied_buf[k-1];
-                valid_taylor[k] <= valid_taylor[k-1];
+                valid_taylor[k] <= !reset_n ? 0 : valid_taylor[k-1];
             end
         end        
     end
 end
 
-// taylor correction, stage 6
+// taylor correction, stage 7
 localparam TAYLOR_MULT_WIDTH = PHASE_DW + OUT_DW;
 // TAYLOR_MULT_WIDTH should fit into the large add operand of a DSP48E1 which is 48 bits
 wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_extended, cos_extended;
