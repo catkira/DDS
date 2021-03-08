@@ -107,14 +107,14 @@ reg signed [OUT_DW - 1 : 0] out_cos_buf;
 reg out_valid_buf;
 always_ff @(posedge clk) begin
     if (sin_quadrant_index2[1]) // if in 3rd or 4th quadrant
-        out_sin_buf <= !reset_n ? 0 : -sin_lut_data;
+        out_sin_buf <= !reset_n ? 0 : NEGATIVE_SINE ? sin_lut_data : -sin_lut_data;
     else
-        out_sin_buf <= !reset_n ? 0 : sin_lut_data;
+        out_sin_buf <= !reset_n ? 0 : NEGATIVE_SINE ? -sin_lut_data : sin_lut_data;
     if (SIN_COS || USE_TAYLOR) begin
         if (sin_quadrant_index2 == 2'b10 || sin_quadrant_index2 == 2'b01) // if in 2nd or 3rd quadrant
-            out_cos_buf <= !reset_n ? 0 : -cos_lut_data;
+            out_cos_buf <= !reset_n ? 0 : NEGATIVE_COSINE ? cos_lut_data : -cos_lut_data ;
         else
-            out_cos_buf <= !reset_n ? 0 : cos_lut_data;
+            out_cos_buf <= !reset_n ? 0 : NEGATIVE_COSINE ? -cos_lut_data : cos_lut_data ;
     end
     out_valid_buf <= !reset_n ? 0 : in_valid_buf3;    
 end
@@ -181,9 +181,15 @@ wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_extended, cos_extended;
 wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_corrected, cos_corrected;
 
 assign sin_extended = {out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1], {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
-assign sin_corrected = sin_extended + out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
 assign cos_extended = {out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1], {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
-assign cos_corrected = cos_extended - out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+if (NEGATIVE_SINE != NEGATIVE_COSINE) begin
+    assign sin_corrected = sin_extended - out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+    assign cos_corrected = cos_extended + out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+end
+else begin
+    assign sin_corrected = sin_extended + out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+    assign cos_corrected = cos_extended - out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+end
 
 reg signed [OUT_DW - 1 : 0] out_sin_buf2;
 reg signed [OUT_DW - 1 : 0] out_cos_buf2;
@@ -201,14 +207,14 @@ if (USE_TAYLOR) begin
 end
 
 if (USE_TAYLOR) begin
-    assign m_axis_out_sin_tdata = NEGATIVE_SINE ? -out_sin_buf2 : out_sin_buf2;
-    assign m_axis_out_cos_tdata = NEGATIVE_COSINE ? -out_cos_buf2 : out_cos_buf2;
+    assign m_axis_out_sin_tdata = out_sin_buf2;
+    assign m_axis_out_cos_tdata = out_cos_buf2;
     assign m_axis_out_sin_tvalid = out_valid_buf2;
     assign m_axis_out_cos_tvalid = out_valid_buf2;    
 end
 else begin
-    assign m_axis_out_sin_tdata = NEGATIVE_SINE ? -out_sin_buf : out_sin_buf;
-    assign m_axis_out_cos_tdata = NEGATIVE_COSINE ? -out_cos_buf : out_cos_buf;
+    assign m_axis_out_sin_tdata = out_sin_buf;
+    assign m_axis_out_cos_tdata = out_cos_buf;
     assign m_axis_out_sin_tvalid = out_valid_buf;
     assign m_axis_out_cos_tvalid = out_valid_buf;
 end
