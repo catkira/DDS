@@ -1,4 +1,4 @@
-# Direct Digital Synthesiyer
+# Direct Digital Synthesizer
 ## Overview
 
 This is a DDS core written in system verilog. It uses a quarter-wave lut plus optional taylor series approximation. The code is optimized and tested for XILINX Series 7 FPGAs with Vivado 2020.2 but should also work on other products. In that case some register widths might be not optimal, most register widths are currently optimized to fit in a DSP48E1 unit.
@@ -24,7 +24,7 @@ The sin-cos lut uses a lookup table that needs to be precalculated using tools/g
 To run the unit tests install
 - python >3.8
 - iverilog >1.4
-- python modules: cocotb, cocotb_test, pytest, pytest-parallel
+- python modules: cocotb, cocotb_test, pytest, pytest-parallel, pytest-cov
 
 and run pytest in the repo directory
 ```
