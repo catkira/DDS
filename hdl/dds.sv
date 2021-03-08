@@ -116,6 +116,8 @@ always_ff @(posedge clk) begin
     out_valid_buf <= !reset_n ? 0 : in_valid_buf3;    
 end
 
+// ------------------- TAYLOR CORRECTION -----------------------------
+
 // taylor phase offset multiplication, stage 2-3
 localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW + 2) : 1;
 localparam PHASE_FACTOR_WIDTH = 18;  // 18 is width of small operand of DSP48E1 
@@ -143,16 +145,41 @@ end
 wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
 assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
 
-// taylor correction, stage 4
+// taylor correction pipeline, stage 4-5
+localparam TAYLOR_PIPELINE_STAGES = 1;
+reg signed [OUT_DW - 1 : 0] out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
+reg signed [OUT_DW - 1 : 0] out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
+reg signed [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0] phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1 : 0];
+reg [TAYLOR_PIPELINE_STAGES - 1 : 0] valid_taylor;
+if (USE_TAYLOR) begin
+    always_ff@(posedge clk) begin
+        foreach(out_sin_buf_taylor[k]) begin
+            if(k == 0) begin
+                out_sin_buf_taylor[k] <= !reset_n ? 0 : out_sin_buf;
+                out_cos_buf_taylor[k] <= !reset_n ? 0 : out_cos_buf;
+                phase_error_multiplied_buf[k] <= !reset_n ? 0 : phase_error_multiplied;
+                valid_taylor[k] <= out_valid_buf;
+            end
+            else begin
+                out_sin_buf_taylor[k] <= !reset_n ? 0 : out_sin_buf_taylor[k-1];
+                out_cos_buf_taylor[k] <= !reset_n ? 0 : out_cos_buf_taylor[k-1];
+                phase_error_multiplied_buf[k] <= !reset_n ? 0 : phase_error_multiplied_buf[k-1];
+                valid_taylor[k] <= valid_taylor[k-1];
+            end
+        end        
+    end
+end
+
+// taylor correction, stage 6
 localparam TAYLOR_MULT_WIDTH = PHASE_DW + OUT_DW;
 // TAYLOR_MULT_WIDTH should fit into the large add operand of a DSP48E1 which is 48 bits
 wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_extended, cos_extended;
 wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_corrected, cos_corrected;
 
-assign sin_extended = {out_sin_buf, {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
-assign sin_corrected = sin_extended + out_cos_buf * phase_error_multiplied;
-assign cos_extended = {out_cos_buf, {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
-assign cos_corrected = cos_extended - out_sin_buf * phase_error_multiplied;
+assign sin_extended = {out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1], {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
+assign sin_corrected = sin_extended + out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+assign cos_extended = {out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1], {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
+assign cos_corrected = cos_extended - out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
 
 reg signed [OUT_DW - 1 : 0] out_sin_buf2;
 reg signed [OUT_DW - 1 : 0] out_cos_buf2;
@@ -165,7 +192,7 @@ if (USE_TAYLOR) begin
         // end
         out_sin_buf2 <= !reset_n ? 0 : sin_corrected[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];  // divide by 2**(PHASE_DW)
         out_cos_buf2 <= !reset_n ? 0 : cos_corrected[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];  // divide by 2**(PHASE_DW)
-        out_valid_buf2 <= !reset_n ? 0 : out_valid_buf;    
+        out_valid_buf2 <= !reset_n ? 0 : valid_taylor[TAYLOR_PIPELINE_STAGES-1];    
     end
 end
 
