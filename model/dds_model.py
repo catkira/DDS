@@ -5,12 +5,14 @@ import math
 import numpy as np
 
 class Model:
-    def __init__(self, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
+    def __init__(self, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS, NEGATIVE_SINE, NEGATIVE_COSINE):
         self.PHASE_DW = PHASE_DW
         self.OUT_DW = OUT_DW
         self.USE_TAYLOR = USE_TAYLOR
         self.LUT_DW = LUT_DW
         self.SIN_COS = SIN_COS
+        self.NEGATIVE_SINE = NEGATIVE_SINE
+        self.NEGATIVE_COSINE = NEGATIVE_COSINE
         
         self.extra_delay = 5                
         if self.USE_TAYLOR:
@@ -50,9 +52,9 @@ class Model:
             self.in_valid = 0
         
         data_in_max = 2**self.PHASE_DW
-        self.data_out_buf[0] = np.round(np.sin(self.data_in_buf*2*np.pi/data_in_max) * (2**(self.OUT_DW-1)-1))
+        self.data_out_buf[0] = (-1)**(self.NEGATIVE_SINE) * np.round(np.sin(self.data_in_buf*2*np.pi/data_in_max) * (2**(self.OUT_DW-1)-1))
         if self.SIN_COS:
-            self.data_out_cos_buf[0] = np.round(np.cos(self.data_in_buf*2*np.pi/data_in_max) * (2**(self.OUT_DW-1)-1))
+            self.data_out_cos_buf[0] = (-1)**(self.NEGATIVE_COSINE) * np.round(np.cos(self.data_in_buf*2*np.pi/data_in_max) * (2**(self.OUT_DW-1)-1))
         else:
             self.data_out_cos_buf[0] = 0
         #if self.out_valid[0]:

@@ -28,6 +28,8 @@ class TB(object):
         self.USE_TAYLOR = int(dut.USE_TAYLOR)
         self.LUT_DW = int(dut.LUT_DW)
         self.SIN_COS = int(dut.SIN_COS)
+        self.NEGATIVE_SINE = int(dut.NEGATIVE_SINE)
+        self.NEGATIVE_COSINE = int(dut.NEGATIVE_COSINE)
 
         self.log = logging.getLogger("cocotb.tb")
         self.log.setLevel(logging.DEBUG)        
@@ -40,7 +42,7 @@ class TB(object):
         spec = importlib.util.spec_from_file_location("dds_model", model_dir)
         foo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(foo)
-        self.model = foo.Model(self.PHASE_DW, self.OUT_DW, self.USE_TAYLOR, self.LUT_DW, self.SIN_COS) 
+        self.model = foo.Model(self.PHASE_DW, self.OUT_DW, self.USE_TAYLOR, self.LUT_DW, self.SIN_COS, self.NEGATIVE_SINE, self.NEGATIVE_COSINE) 
         cocotb.fork(Clock(self.dut.clk, CLK_PERIOD_NS, units='ns').start())
         cocotb.fork(self.model_clk(CLK_PERIOD_NS, 'ns'))    
           
@@ -141,7 +143,9 @@ tools_dir = os.path.abspath(os.path.join(tests_dir, '..', 'tools'))
 @pytest.mark.parametrize("USE_TAYLOR", [1])
 @pytest.mark.parametrize("LUT_DW", [9, 11])
 @pytest.mark.parametrize("SIN_COS", [1])
-def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
+@pytest.mark.parametrize("NEGATIVE_SINE", [1, 0])
+@pytest.mark.parametrize("NEGATIVE_COSINE", [0])
+def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS, NEGATIVE_SINE, NEGATIVE_COSINE):
     dut = "dds"
     module = os.path.splitext(os.path.basename(__file__))[0]
     toplevel = dut
@@ -160,6 +164,8 @@ def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     parameters['USE_TAYLOR'] = USE_TAYLOR
     parameters['LUT_DW'] = LUT_DW
     parameters['SIN_COS'] = SIN_COS
+    parameters['NEGATIVE_SINE'] = NEGATIVE_SINE
+    parameters['NEGATIVE_COSINE'] = NEGATIVE_COSINE    
 
     file_path = os.path.abspath(os.path.join(tests_dir, '../tools/generate_sine_lut.py'))
     spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)
@@ -191,7 +197,9 @@ def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
 @pytest.mark.parametrize("USE_TAYLOR", [0])
 @pytest.mark.parametrize("LUT_DW", [6])
 @pytest.mark.parametrize("SIN_COS", [1, 0])
-def test_dds(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
+@pytest.mark.parametrize("NEGATIVE_SINE", [1, 0])
+@pytest.mark.parametrize("NEGATIVE_COSINE", [1, 0])
+def test_dds(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS, NEGATIVE_SINE, NEGATIVE_COSINE):
     dut = "dds"
     module = os.path.splitext(os.path.basename(__file__))[0]
     toplevel = dut
@@ -210,6 +218,8 @@ def test_dds(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS):
     parameters['USE_TAYLOR'] = USE_TAYLOR
     parameters['LUT_DW'] = LUT_DW
     parameters['SIN_COS'] = SIN_COS
+    parameters['NEGATIVE_SINE'] = NEGATIVE_SINE
+    parameters['NEGATIVE_COSINE'] = NEGATIVE_COSINE
 
     file_path = os.path.abspath(os.path.join(tests_dir, '../tools/generate_sine_lut.py'))
     spec = importlib.util.spec_from_file_location("generate_sine_lut", file_path)

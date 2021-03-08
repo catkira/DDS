@@ -8,9 +8,11 @@ The sin-cos lut uses a lookup table that needs to be precalculated using tools/g
 ## PARAMETERS
 - PHASE_DW selects the number of bits for the phase input
 - OUT_DW selects the number of bits for the output
-- USE_TAYLOR enables taylor series correction of set to 1
+- USE_TAYLOR enables taylor series correction if set to 1
 - LUT_DW not used if USE_TAYLOR = 0. In this case LUT_DW is set to PHASE_DW - 2 so that the entire waveform is created by the lut. If USE_TAYLOR = 1, this value can be used to set the degree of interpolation by taylor series correction.
 - SIN_COS output additional cosine if set to one
+- NEGATIVE_SINE inverts sine output if set to 1
+- NEGATIVE_COSINE inverts cosine output if set to 1
 
 ## PORTS
 - CLK clock

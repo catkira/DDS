@@ -8,6 +8,8 @@ module dds
     parameter USE_TAYLOR = 0,         // use taylor approximation
     parameter LUT_DW = 10,            // width of sine lut if taylor approximation is used
     parameter SIN_COS = 0,            // set to 1 if cos output in addition to sin output is desired
+    parameter NEGATIVE_SINE = 0,      // invert sine output if set to 1
+    parameter NEGATIVE_COSINE = 0,    // invert cosine output of set to 1
     parameter DECIMAL_SHIFT = 0       // not used
 )
 /*********************************************************************************************/
@@ -199,15 +201,15 @@ if (USE_TAYLOR) begin
 end
 
 if (USE_TAYLOR) begin
-    assign m_axis_out_sin_tdata = out_sin_buf2;
+    assign m_axis_out_sin_tdata = NEGATIVE_SINE ? -out_sin_buf2 : out_sin_buf2;
+    assign m_axis_out_cos_tdata = NEGATIVE_COSINE ? -out_cos_buf2 : out_cos_buf2;
     assign m_axis_out_sin_tvalid = out_valid_buf2;
-    assign m_axis_out_cos_tdata = out_cos_buf2;
     assign m_axis_out_cos_tvalid = out_valid_buf2;    
 end
 else begin
-    assign m_axis_out_sin_tdata = out_sin_buf;
+    assign m_axis_out_sin_tdata = NEGATIVE_SINE ? -out_sin_buf : out_sin_buf;
+    assign m_axis_out_cos_tdata = NEGATIVE_COSINE ? -out_cos_buf : out_cos_buf;
     assign m_axis_out_sin_tvalid = out_valid_buf;
-    assign m_axis_out_cos_tdata = out_cos_buf;
     assign m_axis_out_cos_tvalid = out_valid_buf;
 end
 assign m_axis_out_tdata = {m_axis_out_sin_tdata, m_axis_out_cos_tdata};

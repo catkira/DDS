@@ -10,6 +10,8 @@ core_parameter OUT_DW {OPERAND WIDTH OUTPUT} {Width of the output operands}
 core_parameter USE_TAYLOR {USE TAYLOR SERIES APPORXIMATION} {Use taylor series approximation of set to 1}
 core_parameter LUT_DW  {LUT WIDTH} {LUT width of taylor series approximation is used}
 core_parameter SIN_COS  {SIN COS} {Additional cos output if 1}
+core_parameter NEGATIVE_SINE  {NEGATIVE SINE} {output negative sine if 1}
+core_parameter NEGATIVE_COSINE  {NEGATIVE COSINE} {output negative cosine if 1}
 core_parameter DECIMAL_SHIFT  {DECIMAL SHIFT} {Used for scaling the taylor approximation factor}
 
 set bus [ipx::get_bus_interfaces -of_objects $core s_axis_phase]
