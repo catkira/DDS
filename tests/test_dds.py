@@ -143,8 +143,8 @@ tools_dir = os.path.abspath(os.path.join(tests_dir, '..', 'tools'))
 @pytest.mark.parametrize("USE_TAYLOR", [1])
 @pytest.mark.parametrize("LUT_DW", [9, 11])
 @pytest.mark.parametrize("SIN_COS", [1])
-@pytest.mark.parametrize("NEGATIVE_SINE", [1, 0])
-@pytest.mark.parametrize("NEGATIVE_COSINE", [0])
+@pytest.mark.parametrize("NEGATIVE_SINE", [0, 1])
+@pytest.mark.parametrize("NEGATIVE_COSINE", [0, 1])
 def test_dds_taylor(request, PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS, NEGATIVE_SINE, NEGATIVE_COSINE):
     dut = "dds"
     module = os.path.splitext(os.path.basename(__file__))[0]
