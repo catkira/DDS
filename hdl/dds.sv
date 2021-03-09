@@ -122,7 +122,7 @@ end
 // ------------------- TAYLOR CORRECTION -----------------------------
 // TODO: add negative offset to phase error so that taylor correction is effective in 2 directions, should improve accuracy
 
-// taylor phase offset multiplication, stage 2-4
+// taylor phase offset multiplication, stage 2-5
 localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW + 2) : 1;
 localparam PHASE_FACTOR_WIDTH = 18;  // 18 is width of small operand of DSP48E1 
 localparam PI_DECIMAL_SHIFT   = 14;  // this leaves 4 bits for 2*pi which is enough
@@ -130,11 +130,15 @@ localparam real PHASE_FACTOR_REAL = (2 * 3.141592654) * 2**PI_DECIMAL_SHIFT;
 typedef bit unsigned [PHASE_FACTOR_WIDTH - 1 : 0] t_PHASE_FACTOR;
 localparam t_PHASE_FACTOR PHASE_FACTOR = t_PHASE_FACTOR'(PHASE_FACTOR_REAL);
 
-localparam SIN_LUT_DELAY = 2;
-reg unsigned [PHASE_ERROR_WIDTH - 1 : 0]    phase_error_buf [0:SIN_LUT_DELAY];
+localparam SIN_COS_LUT_BALANCING_STAGES = 2;  // this value has to be 2, otherwise valid will be out of sync
+reg unsigned [PHASE_ERROR_WIDTH - 1 : 0]    phase_error_buf [0 : SIN_COS_LUT_BALANCING_STAGES - 1];
 localparam EXTENDED_WIDTH    = PHASE_FACTOR_WIDTH + PHASE_ERROR_WIDTH;
 
-reg signed   [EXTENDED_WIDTH - 1 : 0]       phase_error_multiplied_extended;
+reg signed   [EXTENDED_WIDTH - 1 : 0]    phase_error_multiplied_extended;  // for M reg of DSP
+reg signed   [EXTENDED_WIDTH - 1 : 0]    phase_error_multiplied_extended_buf; // for P reg of DSP
+reg signed [OUT_DW-1 : 0] out_sin_phase;
+reg signed [OUT_DW-1 : 0] out_cos_phase;
+reg phase_error_valid;
 if (USE_TAYLOR) begin
     always_ff@(posedge clk) begin
         foreach(phase_error_buf[k]) begin
@@ -143,74 +147,105 @@ if (USE_TAYLOR) begin
             else
                 phase_error_buf[k] <= phase_error_buf[k-1];
         end
-        phase_error_multiplied_extended <= phase_error_buf[SIN_LUT_DELAY-1] * PHASE_FACTOR; 
+        phase_error_multiplied_extended <= phase_error_buf[SIN_COS_LUT_BALANCING_STAGES-1] * PHASE_FACTOR; 
+        phase_error_multiplied_extended_buf <= phase_error_multiplied_extended;
+        phase_error_valid <= !reset_n ? 0 : out_valid_buf;
+        out_sin_phase <= out_sin_buf;
+        out_cos_phase <= out_cos_buf;
     end
 end
 wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
-assign phase_error_multiplied = phase_error_multiplied_extended[EXTENDED_WIDTH - 1 : 14];
+assign phase_error_multiplied = phase_error_multiplied_extended_buf[EXTENDED_WIDTH - 1 : 14];
 
-// taylor correction pipeline, stage 5-7
-localparam TAYLOR_PIPELINE_STAGES = 2;
-reg signed [OUT_DW - 1 : 0] out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
-reg signed [OUT_DW - 1 : 0] out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1 : 0];
-reg signed [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0] phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1 : 0];
+// taylor correction pipeline, stage 6-8
+localparam TAYLOR_PIPELINE_STAGES = 3;    // 2 for input of taylor mult, 1 for mult, so 3 should be enough
+reg signed [OUT_DW - 1 : 0] out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 2 : 0];
+reg signed [OUT_DW - 1 : 0] out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 2 : 0];
+reg signed [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0] phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 2 : 0];
+// duplicate reg so that it can be pulled into dsp
+// vivado 2020.2 is not smart enough to do it
+reg signed [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0] phase_error_multiplied_buf2[TAYLOR_PIPELINE_STAGES - 2 : 0];  
+reg signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_times_phase;
+reg signed [TAYLOR_MULT_WIDTH - 1 : 0] cos_times_phase;
+reg signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_extended[TAYLOR_PIPELINE_STAGES - 1 : 0];
+reg signed [TAYLOR_MULT_WIDTH - 1 : 0] cos_extended[TAYLOR_PIPELINE_STAGES - 1 : 0];
 reg [TAYLOR_PIPELINE_STAGES - 1 : 0] valid_taylor;
 if (USE_TAYLOR) begin
     always_ff@(posedge clk) begin
-        foreach(out_sin_buf_taylor[k]) begin
-            if(k == 0) begin
-                out_sin_buf_taylor[k] <= out_sin_buf;
-                out_cos_buf_taylor[k] <= out_cos_buf;
-                phase_error_multiplied_buf[k] <= phase_error_multiplied;
-                valid_taylor[k] <= !reset_n ? 0 : out_valid_buf;
+        foreach(valid_taylor[k]) begin
+            if(k == 0) begin  // stage 5
+                out_sin_buf_taylor[k]           <= out_sin_phase;
+                out_cos_buf_taylor[k]           <= out_cos_phase;
+                sin_extended[k]                 <= {out_sin_phase, {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
+                cos_extended[k]                 <= {out_cos_phase, {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
+                phase_error_multiplied_buf[k]   <= phase_error_multiplied;
+                phase_error_multiplied_buf2[k]   <= phase_error_multiplied;
+                valid_taylor[k]                 <= !reset_n ? 0 : phase_error_valid;
             end
-            else begin
-                out_sin_buf_taylor[k] <= out_sin_buf_taylor[k-1];
-                out_cos_buf_taylor[k] <= out_cos_buf_taylor[k-1];
-                phase_error_multiplied_buf[k] <= phase_error_multiplied_buf[k-1];
+            else if (k < TAYLOR_PIPELINE_STAGES -1) begin  // stages 6-7
+                out_sin_buf_taylor[k]           <= out_sin_buf_taylor[k-1];
+                out_cos_buf_taylor[k]           <= out_cos_buf_taylor[k-1];
+                sin_extended[k]                 <= sin_extended[k-1];
+                cos_extended[k]                 <= cos_extended[k-1];
+                phase_error_multiplied_buf[k]   <= phase_error_multiplied_buf[k-1];
+                phase_error_multiplied_buf2[k]   <= phase_error_multiplied_buf2[k-1];
+                valid_taylor[k]                 <= !reset_n ? 0 : valid_taylor[k-1];
+            end
+            else begin  // stage 8: multiplication and further pipelien add operands
+                sin_times_phase <= out_sin_buf_taylor[k-1] * phase_error_multiplied_buf[k-1];
+                cos_times_phase <= out_cos_buf_taylor[k-1] * phase_error_multiplied_buf2[k-1];
+                sin_extended[k] <= sin_extended[k-1];
+                cos_extended[k] <= cos_extended[k-1];
                 valid_taylor[k] <= !reset_n ? 0 : valid_taylor[k-1];
             end
         end        
     end
 end
 
-
 localparam TAYLOR_MULT_WIDTH = PHASE_DW + OUT_DW;
 // TAYLOR_MULT_WIDTH should fit into the large add operand of a DSP48E1 which is 48 bits
-wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_extended, cos_extended;
-wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_corrected, cos_corrected;
+wire signed [TAYLOR_MULT_WIDTH - 1 : 0] sin_corrected, cos_corrected;  // cannot truncate unneeded bits here, because vivado wont pull register into dsp then
 
-assign sin_extended = {out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1], {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
-assign cos_extended = {out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1], {(TAYLOR_MULT_WIDTH - OUT_DW){1'b0}}};  // multiply by 2**(PHASE_DW)
 if (NEGATIVE_SINE != NEGATIVE_COSINE) begin
-    assign sin_corrected = sin_extended - out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
-    assign cos_corrected = cos_extended + out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+    assign sin_corrected = sin_extended[TAYLOR_PIPELINE_STAGES - 1] - cos_times_phase;
+    assign cos_corrected = cos_extended[TAYLOR_PIPELINE_STAGES - 1] + sin_times_phase;
 end
 else begin
-    assign sin_corrected = sin_extended + out_cos_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
-    assign cos_corrected = cos_extended - out_sin_buf_taylor[TAYLOR_PIPELINE_STAGES - 1] * phase_error_multiplied_buf[TAYLOR_PIPELINE_STAGES - 1];
+    assign sin_corrected = sin_extended[TAYLOR_PIPELINE_STAGES - 1] + cos_times_phase;
+    assign cos_corrected = cos_extended[TAYLOR_PIPELINE_STAGES - 1] - sin_times_phase;
 end
 
-reg signed [OUT_DW - 1 : 0] out_sin_buf2;
-reg signed [OUT_DW - 1 : 0] out_cos_buf2;
-reg out_valid_buf2;
+// taylor correction, stage 9 : addition and output buffer
+localparam TAYLOR_OUT_PIPELINE_STAGES = 1;  // more than 1 does not seem to help here, dsp only pulls in 1 reg
+reg signed [TAYLOR_MULT_WIDTH - 1 : 0] out_sin_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1 : 0];
+reg signed [TAYLOR_MULT_WIDTH - 1 : 0] out_cos_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1 : 0];
+reg out_valid_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1 : 0];
 if (USE_TAYLOR) begin
     always_ff @(posedge clk) begin
-        // if (out_valid_buf && USE_TAYLOR) begin
-        //     if(out_cos_buf < 0)
-        //         $display("out_cos_buf = %d, factor = %d", out_cos_buf, TAYLOR_MULT_WIDTH'(out_cos_buf * phase_error_multiplied));
-        // end
-        out_sin_buf2 <= sin_corrected[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];  // divide by 2**(PHASE_DW)
-        out_cos_buf2 <= cos_corrected[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];  // divide by 2**(PHASE_DW)
-        out_valid_buf2 <= !reset_n ? 0 : valid_taylor[TAYLOR_PIPELINE_STAGES-1];    
+        foreach(out_sin_buf2[k]) begin
+            if (k == 0) begin  // addition
+                out_sin_buf2[0]     <= sin_corrected;
+                out_cos_buf2[0]     <= cos_corrected; 
+                out_valid_buf2[0]   <= !reset_n ? 0 : valid_taylor[TAYLOR_PIPELINE_STAGES-1];    
+            end
+            else begin  // pipeline result of addition
+                out_sin_buf2[k]     <= out_sin_buf2[k-1];
+                out_cos_buf2[k]     <= out_cos_buf2[k-1];
+                out_valid_buf2[k]   <= !reset_n ? 0 : out_valid_buf2[k-1];
+            end
+        end
     end
 end
 
 if (USE_TAYLOR) begin
-    assign m_axis_out_sin_tdata = out_sin_buf2;
-    assign m_axis_out_cos_tdata = out_cos_buf2;
-    assign m_axis_out_sin_tvalid = out_valid_buf2;
-    assign m_axis_out_cos_tvalid = out_valid_buf2;    
+    wire signed [TAYLOR_MULT_WIDTH -1 : 0] out_sin;  // create wires to truncate unneeded bits (divide by 2**(PHASE_DW))
+    wire signed [TAYLOR_MULT_WIDTH -1 : 0] out_cos;
+    assign out_sin = out_sin_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1];
+    assign out_cos = out_cos_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1];
+    assign m_axis_out_sin_tdata = out_sin[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];
+    assign m_axis_out_cos_tdata = out_cos[TAYLOR_MULT_WIDTH - 1 -: OUT_DW];
+    assign m_axis_out_sin_tvalid = out_valid_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1];
+    assign m_axis_out_cos_tvalid = out_valid_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1];    
 end
 else begin
     assign m_axis_out_sin_tdata = out_sin_buf;
