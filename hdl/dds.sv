@@ -1,16 +1,22 @@
 `timescale 1ns / 1ns
 
+`ifdef VERILATOR  // make parameter readable from VPI
+  `define VL_RD /*verilator public_flat_rd*/
+`else
+  `define VL_RD
+`endif
+
 module dds
 /*********************************************************************************************/
 #(
-    parameter PHASE_DW = 16,          // phase data width
-    parameter OUT_DW = 16,            // output data width
-    parameter USE_TAYLOR = 0,         // use taylor approximation
-    parameter LUT_DW = 10,            // width of sine lut if taylor approximation is used
-    parameter SIN_COS = 0,            // set to 1 if cos output in addition to sin output is desired
-    parameter NEGATIVE_SINE = 0,      // invert sine output if set to 1
-    parameter NEGATIVE_COSINE = 0,    // invert cosine output of set to 1
-    parameter DECIMAL_SHIFT = 0       // not used
+    parameter PHASE_DW `VL_RD = 16,          // phase data width
+    parameter OUT_DW `VL_RD = 16,            // output data width
+    parameter USE_TAYLOR `VL_RD = 1,         // use taylor approximation
+    parameter LUT_DW `VL_RD = 10,            // width of sine lut if taylor approximation is used
+    parameter SIN_COS `VL_RD = 0,            // set to 1 if cos output in addition to sin output is desired
+    parameter NEGATIVE_SINE `VL_RD = 0,      // invert sine output if set to 1
+    parameter NEGATIVE_COSINE `VL_RD = 0,    // invert cosine output of set to 1
+    parameter DECIMAL_SHIFT `VL_RD = 0       // not used
 )
 /*********************************************************************************************/
 (
@@ -41,9 +47,12 @@ localparam EFFECTIVE_LUT_WIDTH = USE_TAYLOR ? LUT_DW : PHASE_DW - 2;
 reg signed [OUT_DW - 1 : 0] lut [0 : 2**EFFECTIVE_LUT_WIDTH - 1];
 // `include "sine_lut_10_16.vh"  // I dont know how to insert variable numbers into the include string
 initial	begin
-    `ifdef COCOTB_SIM
-        $readmemh($sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
-    `else
+    `ifdef LUT_PATH  // recommended to use this
+        $display("LUT_PATH = %s",`LUT_PATH);
+        $readmemh($sformatf("%s/sine_lut_%0d_%0d.hex",`LUT_PATH,EFFECTIVE_LUT_WIDTH,OUT_DW), lut);  // for makefile            
+    `elsif COCOTB_SIM
+        $readmemh($sformatf("../../hdl/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);  // for pytest, depends on execution dir
+    `else // for vivado
         $readmemh($sformatf("../../../submodules/DDS/lut_data/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
     `endif
     if (USE_TAYLOR) begin
@@ -60,7 +69,7 @@ reg unsigned [EFFECTIVE_LUT_WIDTH-1:0] sin_lut_index, cos_lut_index;
 reg unsigned [1:0] sin_quadrant_index;
 always_ff @(posedge clk) begin
     in_valid_buf2 <= !reset_n ? 0 : in_valid_buf;
-    sin_quadrant_index <= phase_buf[PHASE_DW-1:PHASE_DW-2];
+    sin_quadrant_index <= phase_buf[PHASE_DW-1:PHASE_DW-2];  
     // sin
     if (phase_buf[PHASE_DW - 2]) // if in 2nd or 4th quadrant
         sin_lut_index <= ~phase_buf[PHASE_DW - 3 -: EFFECTIVE_LUT_WIDTH] + 1;
@@ -98,7 +107,7 @@ always_ff @(posedge clk) begin
     if(in_valid_buf2) begin
         // $display("lut[%d] = %d",sin_lut_index, sin_lut_data);
         // $display("lut[%d] = %d",cos_lut_index, cos_lut_data);
-    end
+    end  
 end
 
 // output buffer, stage 4
@@ -116,7 +125,7 @@ always_ff @(posedge clk) begin
         else
             out_cos_buf <= NEGATIVE_COSINE ? -cos_lut_data : cos_lut_data ;
     end
-    out_valid_buf <= !reset_n ? 0 : in_valid_buf3;    
+    out_valid_buf <= !reset_n ? 0 : in_valid_buf3;          
 end
 
 // ------------------- TAYLOR CORRECTION -----------------------------
@@ -151,7 +160,7 @@ if (USE_TAYLOR) begin
         phase_error_multiplied_extended_buf <= phase_error_multiplied_extended;
         phase_error_valid <= !reset_n ? 0 : out_valid_buf;
         out_sin_phase <= out_sin_buf;
-        out_cos_phase <= out_cos_buf;
+        out_cos_phase <= out_cos_buf;       
     end
 end
 wire signed  [EXTENDED_WIDTH - PI_DECIMAL_SHIFT - 1 : 0]    phase_error_multiplied;
@@ -197,7 +206,7 @@ if (USE_TAYLOR) begin
                 sin_extended[k] <= sin_extended[k-1];
                 cos_extended[k] <= cos_extended[k-1];
                 valid_taylor[k] <= !reset_n ? 0 : valid_taylor[k-1];
-            end
+            end         
         end        
     end
 end
