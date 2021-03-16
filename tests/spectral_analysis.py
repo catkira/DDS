@@ -10,11 +10,20 @@ import logging
 import cocotb_test.simulator
 import math
 import numpy as np
+import matplotlib.pyplot as plt
 
 import importlib.util
 
 CLK_PERIOD_NS = 2
-CLK_PERIOD_S = CLK_PERIOD_NS * 0.000000001
+CLK_PERIOD_S = CLK_PERIOD_NS * 1E-9
+
+def dB20(array):
+    with np.errstate(divide='ignore'):
+        return 20 * np.log10(array)
+        
+def dB10(array):
+    with np.errstate(divide='ignore'):
+        return 10 * np.log10(array)        
 
 class TB(object):
     def __init__(self,dut):
@@ -32,8 +41,10 @@ class TB(object):
         self.log.setLevel(logging.DEBUG)        
 
         self.input = []
-        self.freq = 100
-        self.phase_increment = np.uint32(2 * (1 << 30)) # 2 MHz
+        f_mhz = 20.0001
+        f_clk = 1/CLK_PERIOD_S
+        self.accum_width = 32
+        self.phase_increment = np.uint32(round((1<<self.accum_width)/(f_clk/(f_mhz*1E6))))
 
         tests_dir = os.path.abspath(os.path.dirname(__file__))
         model_dir = os.path.abspath(os.path.join(tests_dir, '../model/dds_model.py'))
@@ -55,8 +66,7 @@ class TB(object):
         self.input = []
         accumulator = np.uint32(0)
         while True:
-            if phase == 2**self.PHASE_DW:
-                phase = 0
+
             await RisingEdge(self.dut.clk)
             self.model.set_data(phase) 
             self.input.append(phase)
@@ -65,10 +75,8 @@ class TB(object):
             
             with np.errstate(over='ignore'):
                 accumulator += self.phase_increment
-            #phase = (accumulator >> 7) & ((1 << self.PHASE_DW)-1)
-            #print(accumulator)
-            print(F"accum = {accumulator}   phase = {phase}")
-            phase += self.freq
+            phase = (accumulator >> (self.accum_width - self.PHASE_DW)) & ((1 << self.PHASE_DW)-1)
+            #print(F"accum = {accumulator}   phase = {phase}")
 
     async def cycle_reset(self):
         self.dut.s_axis_phase_tvalid <= 0
@@ -85,9 +93,9 @@ class TB(object):
 async def simple_spectrum(dut):
     tb = TB(dut)
     await tb.cycle_reset()
-    #num_items = 2**int(dut.PHASE_DW)//tb.freq  # one complete wave
-    num_items = 2**int(dut.PHASE_DW)//tb.freq//2  # one half wave
-    #num_items = 100
+    num_items = 500*2**tb.accum_width//tb.phase_increment  # n complete waves
+    #num_items = 2**int(dut.PHASE_DW)//tb.freq//2  # one half wave
+    #num_items = 1000
     gen = cocotb.fork(tb.generate_input())
     output = []
     output_model = []
@@ -129,6 +137,24 @@ async def simple_spectrum(dut):
             np.savetxt(outfile, output_model, fmt='%d')
         with open('../../out_model_cos.txt', 'w') as outfile:
             np.savetxt(outfile, output_model_cos, fmt='%d')
+    if True:
+        fig1 = plt.figure()
+        plt.plot(range(len(output)),output)
+        #plt.plot(range(len(output_model)),output_model)
+        fig2 = plt.figure()
+        output_float = np.array(output) / (2**(tb.OUT_DW-1)-1)
+        S = np.fft.fftshift(np.fft.fft(output_float))
+        freq = np.fft.fftshift(np.fft.fftfreq(n=len(output_float), d=CLK_PERIOD_S))
+        tiny_offset = 1E-10
+        ydata = dB20(np.abs(S+tiny_offset)/(len(output_float)))
+        plt.plot(freq,ydata)
+        plt.ylim(np.maximum(-200,ydata.min()), ydata.max()+10)        
+        fig3 = plt.figure()
+        ydata_onesided = ydata[int(len(ydata)/2):] + 6
+        ydata_onesided[0] -= 6
+        plt.plot(freq[int(len(ydata)/2):],ydata_onesided)
+        plt.ylim(np.maximum(-200,ydata_onesided.min()), ydata_onesided.max()+10)        
+        plt.show()
     for i in range(num_items):
         assert np.abs(output[i] - output_model[i]) <= tolerance, f"[{i}] hdl: {output[i]} \t model: {output_model[i]}"
         if tb.SIN_COS:

@@ -1,5 +1,5 @@
 PWD     =  $(shell pwd)
-SIM     ?=  verilator
+SIM     ?=  icarus
 VERILATOR_TRACE = 1
 
 DUT         = dds
@@ -9,7 +9,7 @@ MODULE      = spectral_analysis
 VERILOG_SOURCES = $(PWD)/../hdl/$(DUT).sv
 
 # module parameters
-export PHASE_DW      ?= 16
+export PHASE_DW      ?= 24
 export OUT_DW        ?= 16
 export USE_TAYLOR    ?= 1
 export LUT_DW        ?= 9
