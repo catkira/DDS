@@ -11,6 +11,7 @@ import cocotb_test.simulator
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import signal
 
 import importlib.util
 
@@ -41,10 +42,10 @@ class TB(object):
         self.log.setLevel(logging.DEBUG)        
 
         self.input = []
-        f_mhz = 20.0001
+        self.f_mhz = 20.0001
         f_clk = 1/CLK_PERIOD_S
         self.accum_width = 32
-        self.phase_increment = np.uint32(round((1<<self.accum_width)/(f_clk/(f_mhz*1E6))))
+        self.phase_increment = np.uint32(round((1<<self.accum_width)/(f_clk/(self.f_mhz*1E6))))
 
         tests_dir = os.path.abspath(os.path.dirname(__file__))
         model_dir = os.path.abspath(os.path.join(tests_dir, '../model/dds_model.py'))
@@ -138,10 +139,19 @@ async def simple_spectrum(dut):
         with open('../../out_model_cos.txt', 'w') as outfile:
             np.savetxt(outfile, output_model_cos, fmt='%d')
     if True:
+        use_window = True
+        window_text = "none"
+        if use_window:
+            window = signal.hann(len(output))
+            window_text = "hann"
+            output *= window
+            output /= sum(window)/len(output)
         fig1 = plt.figure()
+        plt.title(F"DDS output\nf = {tb.f_mhz} Mhz, window = {window_text}")
         plt.plot(range(len(output)),output)
         #plt.plot(range(len(output_model)),output_model)
         fig2 = plt.figure()
+        plt.title(F"Two-sided Spectrum of DDS output\nf = {tb.f_mhz} Mhz, window = {window_text}")
         output_float = np.array(output) / (2**(tb.OUT_DW-1)-1)
         S = np.fft.fftshift(np.fft.fft(output_float))
         freq = np.fft.fftshift(np.fft.fftfreq(n=len(output_float), d=CLK_PERIOD_S))
@@ -150,10 +160,13 @@ async def simple_spectrum(dut):
         plt.plot(freq,ydata)
         plt.ylim(np.maximum(-200,ydata.min()), ydata.max()+10)        
         fig3 = plt.figure()
+        plt.title(F"Power Spectrum of DDS output\nf = {tb.f_mhz} Mhz, window = {window_text}")
         ydata_onesided = ydata[int(len(ydata)/2):] + 6
         ydata_onesided[0] -= 6
         plt.plot(freq[int(len(ydata)/2):],ydata_onesided)
         plt.ylim(np.maximum(-200,ydata_onesided.min()), ydata_onesided.max()+10)        
+        plt.xlabel("Hz")
+        plt.ylabel("Normalized Power in dB")
         plt.show()
     for i in range(num_items):
         assert np.abs(output[i] - output_model[i]) <= tolerance, f"[{i}] hdl: {output[i]} \t model: {output_model[i]}"
