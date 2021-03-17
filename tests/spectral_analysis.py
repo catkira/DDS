@@ -42,9 +42,11 @@ class TB(object):
 
         self.input = []
         self.f_mhz = 20.0001
-        f_clk = 1/CLK_PERIOD_S
+        self.f_clk = 122.88E6
+        if self.f_clk != 1/CLK_PERIOD_S:
+            print("Warning: time stamps in waveform are not accurate, because f_clk != 1/CLK_PERIOD_S !")
         self.accum_width = 32
-        self.phase_increment = np.uint32(round((1<<self.accum_width)/(f_clk/(self.f_mhz*1E6))))
+        self.phase_increment = np.uint32(round((1<<self.accum_width)/(self.f_clk/(self.f_mhz*1E6))))
 
         tests_dir = os.path.abspath(os.path.dirname(__file__))
         model_dir = os.path.abspath(os.path.join(tests_dir, '../model/dds_model.py'))
@@ -146,20 +148,20 @@ async def simple_spectrum(dut):
             output *= window
             output /= sum(window)/len(output)
         fig1 = plt.figure()
-        plt.title(F"DDS output\nf = {tb.f_mhz} Mhz, n = {num_items}, window = {window_text}")
+        plt.title(F"DDS output\nf_clk = {tb.f_clk*1E-6} MHz, f_signal = {tb.f_mhz} Mhz, n = {num_items}, window = {window_text}")
         plt.plot(range(len(output)),output)
         #plt.plot(range(len(output_model)),output_model)
         fig2 = plt.figure()
-        plt.title(F"Two-sided Spectrum of DDS output\nf = {tb.f_mhz} Mhz, n = {num_items}, window = {window_text}")
+        plt.title(F"Two-sided Spectrum of DDS output\nf_clk = {tb.f_clk*1E-6} MHz, f_signal = {tb.f_mhz} Mhz, n = {num_items}, window = {window_text}")
         output_float = np.array(output) / (2**(tb.OUT_DW-1)-1)
         S = np.fft.fftshift(np.fft.fft(output_float))
-        freq = np.fft.fftshift(np.fft.fftfreq(n=len(output_float), d=CLK_PERIOD_S))
+        freq = np.fft.fftshift(np.fft.fftfreq(n=len(output_float), d=1/tb.f_clk))
         tiny_offset = 1E-10
         ydata = dB20(np.abs(S+tiny_offset)/(len(output_float)))
         plt.plot(freq,ydata)
         plt.ylim(np.maximum(-200,ydata.min()), ydata.max()+10)        
         fig3 = plt.figure()
-        plt.title(F"Power Spectrum of DDS output\nf = {tb.f_mhz} Mhz, n = {num_items}, window = {window_text}")
+        plt.title(F"Power Spectrum of DDS output\nf_clk = {tb.f_clk*1E-6} MHz, f_signal = {tb.f_mhz} Mhz, n = {num_items}, window = {window_text}")
         ydata_onesided = ydata[int(len(ydata)/2):] + 6
         ydata_onesided[0] -= 6
         plt.plot(freq[int(len(ydata)/2):],ydata_onesided)
