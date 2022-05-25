@@ -36,6 +36,7 @@ pytest -v --workers 10
 ## TODO
 - add taylor series correction in negative direction, should improve accuracy slighty
 - put sin-cos lut in separate module
+- benchmark error against Xilinx DDS
 
 ## References
 - http://www.martin-kumm.de/wiki/doku.php?id=04FPGA_Cores:DDS_Synthesizer
