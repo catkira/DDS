@@ -34,7 +34,7 @@ pytest -v --workers 10
 ```
 
 ## TODO
-- add taylor series correction in negative direction, should improve accuracy slighty
+- add taylor series correction in negative direction, should improve accuracy slightly
 - put sin-cos lut in separate module
 - benchmark error against Xilinx DDS
 
