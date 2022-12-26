@@ -5,3 +5,4 @@ pytest-parallel
 numpy
 py
 fixedpoint
+bitstring
