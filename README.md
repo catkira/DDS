@@ -1,3 +1,5 @@
+[![Verify](https://github.com/catkira/DDS/actions/workflows/verify.yml/badge.svg)](https://github.com/catkira/DDS/actions/workflows/verify.yml)
+
 # Direct Digital Synthesizer
 ## Overview
 
