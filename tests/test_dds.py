@@ -35,6 +35,9 @@ class TB(object):
         self.log.setLevel(logging.DEBUG)        
 
         self.input = []
+        # using a higher than 1 frequency here speeds up simulation,
+        # because the simulation runs until a half-wave is done for each phase width.
+        # However not every LUT entry will get tested if frequency > 1
         self.freq = 100
 
         tests_dir = os.path.abspath(os.path.dirname(__file__))
@@ -56,22 +59,22 @@ class TB(object):
         phase = 0
         self.input = []
         while True:
-            if phase == 2**self.PHASE_DW:
-                phase = 0
+            if phase >= 2**self.PHASE_DW:
+                phase = (2**self.PHASE_DW-1) % phase # do wrap around
             await RisingEdge(self.dut.clk)
             self.model.set_data(phase) 
             self.input.append(phase)
-            self.dut.s_axis_phase_tdata <= phase
-            self.dut.s_axis_phase_tvalid <= 1
+            self.dut.s_axis_phase_tdata = phase
+            self.dut.s_axis_phase_tvalid = 1
             phase += self.freq
 
     async def cycle_reset(self):
-        self.dut.s_axis_phase_tvalid <= 0
-        self.dut.reset_n <= 0
+        self.dut.s_axis_phase_tvalid = 0
+        self.dut.reset_n = 0
         await RisingEdge(self.dut.clk)
-        self.dut.reset_n <= 0
+        self.dut.reset_n = 0
         await RisingEdge(self.dut.clk)
-        self.dut.reset_n <= 1
+        self.dut.reset_n = 1
         await RisingEdge(self.dut.clk)
         self.model.reset()
         
@@ -130,7 +133,7 @@ async def simple_test(dut):
             assert np.abs(output_cos[i] - output_model_cos[i]) <= tolerance, f"[{i}] hdl: {output_cos[i]} \t model: {output_model_cos[i]}"
     #print(f"received {len(output)} samples")
     gen.kill()
-    tb.dut.s_axis_phase_tvalid <= 0
+    tb.dut.s_axis_phase_tvalid = 0
 # cocotb-test
 
 
