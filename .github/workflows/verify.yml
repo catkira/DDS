@@ -15,8 +15,12 @@ jobs:
 
     - name: Install dependencies
       run: |
+        git clone https://github.com/catkira/cocotb.git
+        cd cocotb
+        pip3 install -e .
+        cd ..
         pip3 install -r requirements.txt
         sudo apt install -y --no-install-recommends iverilog
     - name: Verify with cocotb & icarus
       run: |
-        pytest -v --workers 10 tests/test_dds.py
+        pytest -v --workers=16 tests/test_dds.py
