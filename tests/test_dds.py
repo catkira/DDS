@@ -260,5 +260,5 @@ def test_dds(PHASE_DW, OUT_DW, USE_TAYLOR, LUT_DW, SIN_COS, NEGATIVE_SINE, NEGAT
 if __name__ == '__main__':
     os.environ['PLOTS'] = '0'
     # os.environ['SIM'] = 'iverilog'
-    test_dds(PHASE_DW = 16, OUT_DW = 3, USE_TAYLOR = 0, LUT_DW = 6, SIN_COS = 1, NEGATIVE_SINE = 0, NEGATIVE_COSINE = 0, USE_LUT_FILE = 1)
+    test_dds(PHASE_DW = 16, OUT_DW = 3, USE_TAYLOR = 1, LUT_DW = 6, SIN_COS = 1, NEGATIVE_SINE = 0, NEGATIVE_COSINE = 0, USE_LUT_FILE = 1)
     

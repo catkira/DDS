@@ -1,11 +1,5 @@
 `timescale 1ns / 1ns
 
-`ifdef VERILATOR  // make parameter readable from VPI
-  `define VL_RD /*verilator public_flat_rd*/
-`else
-  `define VL_RD
-`endif
-
 module dds
 /*********************************************************************************************/
 #(
@@ -17,13 +11,13 @@ module dds
     parameter NEGATIVE_SINE = 0,      // invert sine output if set to 1
     parameter NEGATIVE_COSINE = 0,    // invert cosine output of set to 1
     parameter DECIMAL_SHIFT = 0,      // not used
-    parameter USE_LUT_FILE = 1
+    parameter USE_LUT_FILE = 0
 )
 /*********************************************************************************************/
 (
     input                                   clk,
     input                                   reset_n,
-    input   wire  unsigned [PHASE_DW-1:0]   s_axis_phase_tdata,
+    input   wire           [PHASE_DW-1:0]   s_axis_phase_tdata,
     input                                   s_axis_phase_tvalid,
     output  wire    signed [OUT_DW-1:0]     m_axis_out_sin_tdata,
     output                                  m_axis_out_sin_tvalid,
@@ -34,7 +28,7 @@ module dds
 );
 /*********************************************************************************************/
 // input buffer, stage 1
-reg unsigned [PHASE_DW - 1 : 0] phase_buf;
+reg [PHASE_DW - 1 : 0] phase_buf;
 reg in_valid_buf;
 always_ff @(posedge clk) begin
     phase_buf <= !reset_n ? 0 : (s_axis_phase_tvalid ? s_axis_phase_tdata : phase_buf);
@@ -56,7 +50,8 @@ initial	begin
             $readmemh($sformatf("../../../submodules/DDS/lut_data/sine_lut_%0d_%0d.hex",EFFECTIVE_LUT_WIDTH,OUT_DW), lut);
         `endif
     end else begin
-        for (integer i = 0; i < 2 ** EFFECTIVE_LUT_WIDTH; i = i + 1) begin
+        integer i;
+        for (i = 0; i < 2 ** EFFECTIVE_LUT_WIDTH; i = i + 1) begin
             // implicit conversion from real to integer does round away from zero
             // explicit conversion with $rtoi() does truncation
             // https://stackoverflow.com/questions/42003998/systemverilog-round-real-type
@@ -74,8 +69,8 @@ end
 
 // calculate lut index, stage 2
 reg in_valid_buf2;
-reg unsigned [EFFECTIVE_LUT_WIDTH-1:0] sin_lut_index, cos_lut_index;
-reg unsigned [1:0] sin_quadrant_index;
+reg [EFFECTIVE_LUT_WIDTH-1:0] sin_lut_index, cos_lut_index;
+reg [1:0] sin_quadrant_index;
 always_ff @(posedge clk) begin
     if (!reset_n) begin
         cos_lut_index <= '0;
@@ -103,7 +98,7 @@ end
 // lut reading, stage 3
 reg in_valid_buf3;
 reg signed [OUT_DW-1:0] sin_lut_data, cos_lut_data;
-reg unsigned [1:0] sin_quadrant_index2;
+reg [1:0] sin_quadrant_index2;
 always_ff @(posedge clk) begin
     if (!reset_n) begin
         in_valid_buf3 <= '0;
@@ -160,11 +155,11 @@ localparam PHASE_ERROR_WIDTH = USE_TAYLOR ? PHASE_DW - (LUT_DW + 2) : 1;
 localparam PHASE_FACTOR_WIDTH = 18;  // 18 is width of small operand of DSP48E1 
 localparam PI_DECIMAL_SHIFT   = 14;  // this leaves 4 bits for 2*pi which is enough
 localparam real PHASE_FACTOR_REAL = (2 * 3.141592654) * 2**PI_DECIMAL_SHIFT;
-typedef bit unsigned [PHASE_FACTOR_WIDTH - 1 : 0] t_PHASE_FACTOR;
-localparam t_PHASE_FACTOR PHASE_FACTOR = t_PHASE_FACTOR'(PHASE_FACTOR_REAL);
+// typedef bit [PHASE_FACTOR_WIDTH - 1 : 0] t_PHASE_FACTOR;
+localparam [PHASE_FACTOR_WIDTH - 1 : 0] PHASE_FACTOR = $rtoi(PHASE_FACTOR_REAL);
 
 localparam SIN_COS_LUT_BALANCING_STAGES = 2;  // this value has to be 2, otherwise valid will be out of sync
-reg unsigned [PHASE_ERROR_WIDTH - 1 : 0]    phase_error_buf [0 : SIN_COS_LUT_BALANCING_STAGES - 1];
+reg [PHASE_ERROR_WIDTH - 1 : 0]    phase_error_buf [0 : SIN_COS_LUT_BALANCING_STAGES - 1];
 localparam EXTENDED_WIDTH    = PHASE_FACTOR_WIDTH + PHASE_ERROR_WIDTH;
 
 reg signed   [EXTENDED_WIDTH - 1 : 0]    phase_error_multiplied_extended;  // for M reg of DSP
@@ -172,19 +167,22 @@ reg signed   [EXTENDED_WIDTH - 1 : 0]    phase_error_multiplied_extended_buf; //
 reg signed [OUT_DW-1 : 0] out_sin_phase;
 reg signed [OUT_DW-1 : 0] out_cos_phase;
 reg phase_error_valid;
+integer i;
 if (USE_TAYLOR) begin
     always_ff@(posedge clk) begin
         if (!reset_n) begin
             phase_error_valid <= '0;
-            foreach(phase_error_buf[k]) phase_error_buf[k] <= '0;
+            for(i = 0; i < SIN_COS_LUT_BALANCING_STAGES; i = i + 1) begin
+                phase_error_buf[i] <= '0;
+            end
             out_sin_phase <= '0;
             out_cos_phase <= '0;
         end else begin
-            foreach(phase_error_buf[k]) begin
-                if(k == 0)
+            for(i = 0; i < SIN_COS_LUT_BALANCING_STAGES; i = i + 1) begin
+                if(i == 0)
                     phase_error_buf[0] <= phase_buf[PHASE_ERROR_WIDTH - 1: 0];
                 else
-                    phase_error_buf[k] <= phase_error_buf[k-1];
+                    phase_error_buf[i] <= phase_error_buf[i - 1];
             end
             phase_error_multiplied_extended <= phase_error_buf[SIN_COS_LUT_BALANCING_STAGES-1] * PHASE_FACTOR; 
             phase_error_multiplied_extended_buf <= phase_error_multiplied_extended;
@@ -212,7 +210,8 @@ reg signed [TAYLOR_MULT_WIDTH - 1 : 0] cos_extended[TAYLOR_PIPELINE_STAGES - 1 :
 reg [TAYLOR_PIPELINE_STAGES - 1 : 0] valid_taylor;
 if (USE_TAYLOR) begin
     always_ff@(posedge clk) begin
-        foreach(valid_taylor[k]) begin
+        integer k;
+        for (k = 0; k < TAYLOR_PIPELINE_STAGES; k = k + 1) begin
             if (!reset_n) begin
                 out_sin_buf_taylor[k] <= '0;
                 out_cos_buf_taylor[k] <= '0;
@@ -272,7 +271,8 @@ reg signed [TAYLOR_MULT_WIDTH - 1 : 0] out_cos_buf2[TAYLOR_OUT_PIPELINE_STAGES -
 reg out_valid_buf2[TAYLOR_OUT_PIPELINE_STAGES - 1 : 0];
 if (USE_TAYLOR) begin
     always_ff @(posedge clk) begin
-        foreach(out_sin_buf2[k]) begin
+        integer k;
+        for (k = 0; k < TAYLOR_OUT_PIPELINE_STAGES; k = k + 1) begin
             if (k == 0) begin  // addition
                 out_sin_buf2[0]     <= !reset_n ? 0 : sin_corrected;
                 out_cos_buf2[0]     <= !reset_n ? 0 : cos_corrected; 
