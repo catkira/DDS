@@ -1,0 +1,22 @@
+name: Yosys
+
+on: [push]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python "3.10"
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+
+    - name: Install Yosys + Nextpnr snap
+      run: |
+        wget https://github.com/openXC7/openXC7-snap/releases/download/v0.4.0/openxc7_0.4.0_amd64.snap
+        sudo snap install --dangerous --classic openxc7_0.4.0_amd64.snap
+    - name: Test with Yosys frontend
+      run: |
+        #yosys hdl/dds.sv
