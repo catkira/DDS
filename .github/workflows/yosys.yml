@@ -15,8 +15,10 @@ jobs:
 
     - name: Install Yosys + Nextpnr snap
       run: |
-        wget https://github.com/openXC7/openXC7-snap/releases/download/v0.4.0/openxc7_0.4.0_amd64.snap
-        sudo snap install --dangerous --classic openxc7_0.4.0_amd64.snap
+        #wget https://github.com/openXC7/openXC7-snap/releases/download/v0.4.0/openxc7_0.4.0_amd64.snap
+        #sudo snap install --dangerous --classic openxc7_0.4.0_amd64.snap
+        wget https://github.com/openXC7/yosys-snap/releases/download/v0.17/yosys_0.17_amd64.snap
+        sudo snap install --dangerous --classic yosys_0.17_amd64.snap
     - name: Test with Yosys frontend
       run: |
-        #yosys hdl/dds.sv
+        yosys -p "synth_xilinx -flatten -abc9 -arch xc7 -top dds; write_json dds.json" hdl/dds.sv
